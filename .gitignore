@@ -1,0 +1,14 @@
+node_modules/
+Frontend/dist/
+backend/coverage/
+backend/uploads/
+backend/test-report.pdf
+graphify-out/
+Frontend/graphify-out/
+.env
+backend/.env
+Аккаунты.txt
+ssl/
+~$*.docx
+~WRL*.tmp
+*.log
