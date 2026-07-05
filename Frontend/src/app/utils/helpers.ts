@@ -35,3 +35,11 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
+
+export function getTaskTags(task: any, allTags: any[]): any[] {
+  if (!task?.tags) return [];
+  return task.tags.map((tt: any) => {
+    if (tt.tag) return tt.tag;
+    return allTags.find((t: any) => t.id === tt);
+  }).filter(Boolean);
+}

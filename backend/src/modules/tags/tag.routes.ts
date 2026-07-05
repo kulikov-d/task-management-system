@@ -1,13 +1,10 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import { listTags, createTag, deleteTag } from "./tag.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/", listTags);
-router.post("/", createTag);
-router.delete("/:id", deleteTag);
-
-export { router as tagRouter };
+export async function tagPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/", listTags);
+  fastify.post("/", createTag);
+  fastify.delete("/:id", deleteTag);
+}

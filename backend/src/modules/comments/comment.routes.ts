@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import {
   listComments,
@@ -7,13 +7,10 @@ import {
   deleteComment,
 } from "./comment.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/tasks/:taskId/comments", listComments);
-router.post("/tasks/:taskId/comments", createComment);
-router.put("/comments/:id", updateComment);
-router.delete("/comments/:id", deleteComment);
-
-export { router as commentRouter };
+export async function commentPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/tasks/:taskId/comments", listComments);
+  fastify.post("/tasks/:taskId/comments", createComment);
+  fastify.put("/comments/:id", updateComment);
+  fastify.delete("/comments/:id", deleteComment);
+}

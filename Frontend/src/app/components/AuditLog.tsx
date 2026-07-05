@@ -18,12 +18,14 @@ const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string }>
   OVERDUE: { label: "Просрочка", icon: MessageSquare, color: "#ef4444" },
 };
 
-export function AuditLog() {
+export function AuditLog({ project }: { project: any }) {
   const auditLogs = useAppStore((s) => s.auditLogs);
   const users = useAppStore((s) => s.users);
   const loadAuditLogs = useAppStore((s) => s.loadAuditLogs);
 
-  useEffect(() => { loadAuditLogs(); }, [loadAuditLogs]);
+  useEffect(() => {
+    loadAuditLogs();
+  }, [loadAuditLogs]);
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5" style={{ background: "var(--background)" }}>

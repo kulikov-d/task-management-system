@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 
@@ -12,14 +12,19 @@ interface TaskFormProps {
 export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
   const users = useAppStore((s) => s.users);
   const tags = useAppStore((s) => s.tags);
+  const sprints = useAppStore((s) => s.sprints);
+  const loadSprints = useAppStore((s) => s.loadSprints);
   const createTask = useAppStore((s) => s.createTask);
   const updateTask = useAppStore((s) => s.updateTask);
+
+  useEffect(() => { loadSprints(projectId); }, [projectId, loadSprints]);
 
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
   const [priority, setPriority] = useState(task?.priority || "MEDIUM");
   const [assigneeId, setAssigneeId] = useState(task?.assigneeId || "");
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.slice(0, 10) : "");
+  const [sprintId, setSprintId] = useState(task?.sprintId || "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
     task?.tags?.map((tt: any) => tt.tagId || tt.tag?.id || tt) || []
   );
@@ -36,6 +41,7 @@ export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
         priority,
         assigneeId: assigneeId || null,
         dueDate: dueDate || null,
+        sprintId: sprintId || null,
         projectId,
         tagIds: selectedTagIds,
       };
@@ -142,15 +148,32 @@ export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Дедлайн</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={inputStyle}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Дедлайн</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm"
+                style={inputStyle}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Спринт</label>
+              <select
+                value={sprintId}
+                onChange={(e) => setSprintId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm"
+                style={inputStyle}
+              >
+                <option value="">Без спринта</option>
+                {sprints.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {tags.length > 0 && (

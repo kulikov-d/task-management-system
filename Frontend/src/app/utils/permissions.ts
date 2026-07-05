@@ -10,10 +10,6 @@ export function isDeveloper(role: string): boolean {
   return role === "developer";
 }
 
-export function isViewer(role: string): boolean {
-  return role === "viewer";
-}
-
 export function canManageProject(user: any): boolean {
   return ["admin", "lead"].includes(user?.role);
 }

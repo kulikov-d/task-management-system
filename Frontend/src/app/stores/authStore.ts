@@ -2,6 +2,15 @@ import { create } from "zustand";
 import { authApi, setAccessToken } from "../api/client";
 import type { User } from "../types/api";
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true;
+  }
+}
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
@@ -56,6 +65,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   loadUser: async () => {
     const token = localStorage.getItem("accessToken");
     if (!token) {
+      set({ isLoading: false });
+      return;
+    }
+    if (isTokenExpired(token)) {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000/api"}/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAccessToken(data.accessToken);
+          localStorage.setItem("accessToken", data.accessToken);
+          const user = await authApi.me();
+          set({ user, isAuthenticated: true, isLoading: false });
+          return;
+        }
+      } catch {}
+      localStorage.removeItem("accessToken");
+      setAccessToken(null);
       set({ isLoading: false });
       return;
     }

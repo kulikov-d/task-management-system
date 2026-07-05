@@ -1,4 +1,4 @@
-export type Role = "admin" | "lead" | "developer" | "viewer";
+export type Role = "admin" | "lead" | "developer";
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -44,6 +44,8 @@ export interface Task {
   author?: User;
   assigneeId?: string | null;
   assignee?: User | null;
+  sprintId?: string | null;
+  sprint?: Sprint | null;
   dueDate?: string | null;
   position: number;
   tags: TaskTag[];
@@ -109,6 +111,19 @@ export interface AuditLog {
   userId: string;
   user: User;
   createdAt: string;
+}
+
+export interface Sprint {
+  id: string;
+  name: string;
+  description?: string | null;
+  projectId: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  _count?: { tasks: number };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthResponse {

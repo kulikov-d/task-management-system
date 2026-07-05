@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
@@ -9,48 +9,36 @@ const createTagSchema = z.object({
   projectId: z.string(),
 });
 
-export async function listTags(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { projectId } = req.query;
-    const where = projectId ? { projectId: projectId as string } : {};
+export async function listTags(request: FastifyRequest, reply: FastifyReply) {
+  const { projectId } = request.query as { projectId?: string };
+  const where = projectId ? { projectId } : {};
 
-    const tags = await prisma.tag.findMany({
-      where,
-      include: { _count: { select: { tasks: true } } },
-      orderBy: { name: "asc" },
-    });
-    res.json(tags);
-  } catch (error) {
-    next(error);
-  }
+  const tags = await prisma.tag.findMany({
+    where,
+    include: { _count: { select: { tasks: true } } },
+    orderBy: { name: "asc" },
+  });
+  return reply.send(tags);
 }
 
-export async function createTag(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = req.userId!;
-    const data = createTagSchema.parse(req.body);
+export async function createTag(request: FastifyRequest, reply: FastifyReply) {
+  const userId = request.userId!;
+  const data = createTagSchema.parse(request.body);
 
-    const existing = await prisma.tag.findUnique({
-      where: { projectId_name: { projectId: data.projectId, name: data.name } },
-    });
-    if (existing) throw new AppError("Tag with this name already exists in this project", 409);
+  const existing = await prisma.tag.findUnique({
+    where: { projectId_name: { projectId: data.projectId, name: data.name } },
+  });
+  if (existing) throw new AppError("Tag with this name already exists in this project", 409);
 
-    const tag = await prisma.tag.create({
-      data: { ...data, creatorId: userId },
-    });
+  const tag = await prisma.tag.create({
+    data: { ...data, creatorId: userId },
+  });
 
-    res.status(201).json(tag);
-  } catch (error) {
-    next(error);
-  }
+  return reply.code(201).send(tag);
 }
 
-export async function deleteTag(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { id } = req.params;
-    await prisma.tag.delete({ where: { id } });
-    res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
+export async function deleteTag(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  await prisma.tag.delete({ where: { id } });
+  return reply.code(204).send();
 }

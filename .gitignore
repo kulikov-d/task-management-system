@@ -1,5 +1,6 @@
 node_modules/
 Frontend/dist/
+backend/dist/
 backend/coverage/
 backend/uploads/
 backend/test-report.pdf
@@ -12,3 +13,5 @@ ssl/
 ~$*.docx
 ~WRL*.tmp
 *.log
+*.docx
+*.png

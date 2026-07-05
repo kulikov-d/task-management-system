@@ -7,10 +7,10 @@ export async function auditLog(
   action: string,
   entity: string,
   entityId: string,
-  diff?: Record<string, unknown> | null
+  diff?: Record<string, unknown> | null,
+  explicitUserId?: string
 ): Promise<void> {
-  const store = userContext.getStore();
-  const userId = store?.userId;
+  const userId = explicitUserId || userContext.getStore()?.userId;
   if (!userId) return;
 
   try {

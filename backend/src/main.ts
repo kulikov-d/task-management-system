@@ -1,78 +1,80 @@
-import express from "express";
-import cors from "cors";
-import cookieParser from "cookie-parser";
-import helmet from "helmet";
-import { createServer } from "http";
+import Fastify from "fastify";
+import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyCookie from "@fastify/cookie";
+import fastifyStatic from "@fastify/static";
+import fastifyMultipart from "@fastify/multipart";
 import fs from "fs";
+import path from "path";
 import { env } from "./config/env";
 import { connectDatabase } from "./config/database";
 import { initSocket } from "./config/socket";
 import { errorHandler } from "./common/exceptions/errorHandler";
-import { startDeadlineScheduler } from "./modules/scheduler/deadline.scheduler";
-import { authRouter } from "./modules/auth/auth.routes";
-import { projectRouter } from "./modules/projects/project.routes";
-import { taskRouter } from "./modules/tasks/task.routes";
-import { commentRouter } from "./modules/comments/comment.routes";
-import { attachmentRouter } from "./modules/attachments/attachment.routes";
-import { tagRouter } from "./modules/tags/tag.routes";
-import { analyticsRouter } from "./modules/analytics/analytics.routes";
-import { notificationRouter } from "./modules/notifications/notification.routes";
-import { auditRouter } from "./modules/audit/audit.routes";
-import { userRouter } from "./modules/users/user.routes";
+import { authPlugin } from "./modules/auth/auth.routes";
+import { projectPlugin } from "./modules/projects/project.routes";
+import { taskPlugin } from "./modules/tasks/task.routes";
+import { commentPlugin } from "./modules/comments/comment.routes";
+import { attachmentPlugin } from "./modules/attachments/attachment.routes";
+import { tagPlugin } from "./modules/tags/tag.routes";
+import { analyticsPlugin } from "./modules/analytics/analytics.routes";
+import { notificationPlugin } from "./modules/notifications/notification.routes";
+import { auditPlugin } from "./modules/audit/audit.routes";
+import { userPlugin } from "./modules/users/user.routes";
+import { sprintPlugin } from "./modules/sprints/sprint.routes";
+import { searchPlugin } from "./modules/search/search.routes";
+import { teamPlugin } from "./modules/teams/team.routes";
 
 async function main() {
   await connectDatabase();
 
-  const app = express();
-  const server = createServer(app);
+  const fastify = Fastify({ logger: false });
 
-  initSocket(server);
-
-  app.use(helmet());
+  await fastify.register(fastifyHelmet);
   const allowedOrigins = env.FRONTEND_URL.split(",").map((s) => s.trim());
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error("Not allowed by CORS"));
-        }
-      },
-      credentials: true,
-    })
-  );
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ extended: true }));
-  app.use(cookieParser());
+  await fastify.register(fastifyCors, {
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, false);
+      }
+    },
+    credentials: true,
+  });
+  await fastify.register(fastifyCookie);
+  await fastify.register(fastifyMultipart);
 
-  if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads", { recursive: true });
+  const uploadsDir = path.resolve("uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
   }
-  app.use("/uploads", express.static("uploads"));
+  await fastify.register(fastifyStatic, { root: uploadsDir, prefix: "/uploads" });
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  fastify.get("/api/health", async (_request, _reply) => {
+    return { status: "ok", timestamp: new Date().toISOString() };
   });
 
-  app.use("/api/auth", authRouter);
-  app.use("/api/users", userRouter);
-  app.use("/api/projects", projectRouter);
-  app.use("/api/tasks", taskRouter);
-  app.use("/api", commentRouter);
-  app.use("/api", attachmentRouter);
-  app.use("/api/tags", tagRouter);
-  app.use("/api/analytics", analyticsRouter);
-  app.use("/api/notifications", notificationRouter);
-  app.use("/api/audit", auditRouter);
+  await fastify.register(authPlugin, { prefix: "/api/auth" });
+  await fastify.register(userPlugin, { prefix: "/api/users" });
+  await fastify.register(projectPlugin, { prefix: "/api/projects" });
+  await fastify.register(taskPlugin, { prefix: "/api/tasks" });
+  await fastify.register(commentPlugin, { prefix: "/api" });
+  await fastify.register(attachmentPlugin, { prefix: "/api" });
+  await fastify.register(tagPlugin, { prefix: "/api/tags" });
+  await fastify.register(analyticsPlugin, { prefix: "/api/analytics" });
+  await fastify.register(notificationPlugin, { prefix: "/api/notifications" });
+  await fastify.register(auditPlugin, { prefix: "/api/audit" });
+  await fastify.register(sprintPlugin, { prefix: "/api/sprints" });
+  await fastify.register(searchPlugin, { prefix: "/api/search" });
+  await fastify.register(teamPlugin, { prefix: "/api/teams" });
 
-  app.use(errorHandler);
+  fastify.setErrorHandler(errorHandler);
 
-  server.listen(env.PORT, () => {
-    console.log(`✓ Server running on port ${env.PORT}`);
-    console.log(`✓ Environment: ${env.NODE_ENV}`);
-    startDeadlineScheduler();
-  });
+  initSocket(fastify.server);
+
+  await fastify.listen({ port: env.PORT, host: "0.0.0.0" });
+  console.log(`✓ Server running on port ${env.PORT}`);
+  console.log(`✓ Environment: ${env.NODE_ENV}`);
 }
 
 main().catch((error) => {

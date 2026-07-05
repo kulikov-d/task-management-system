@@ -1,11 +1,8 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import { listAuditLogs } from "./audit.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/", listAuditLogs);
-
-export { router as auditRouter };
+export async function auditPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/", listAuditLogs);
+}

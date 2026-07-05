@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import {
   getBurndown,
@@ -7,13 +7,10 @@ import {
   getExport,
 } from "./analytics.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/burndown", getBurndown);
-router.get("/velocity", getVelocity);
-router.get("/tasks", getTaskStats);
-router.get("/export", getExport);
-
-export { router as analyticsRouter };
+export async function analyticsPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/burndown", getBurndown);
+  fastify.get("/velocity", getVelocity);
+  fastify.get("/tasks", getTaskStats);
+  fastify.get("/export", getExport);
+}

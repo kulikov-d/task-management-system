@@ -1,74 +1,58 @@
-import { Request, Response, NextFunction } from "express";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { register, login, refreshToken, getMe } from "./auth.service";
 import { env } from "../../config/env";
 
-function setRefreshTokenCookie(res: Response, token: string) {
-  res.cookie("refreshToken", token, {
+function setRefreshTokenCookie(reply: FastifyReply, token: string) {
+  reply.setCookie("refreshToken", token, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/api/auth",
   });
 }
 
-export async function registerHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { email, password, name } = req.body;
-    const result = await register(email, password, name);
-    setRefreshTokenCookie(res, result.refreshToken);
-    res.status(201).json({
-      user: result.user,
-      accessToken: result.accessToken,
-    });
-  } catch (error) {
-    next(error);
-  }
+export async function registerHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { email, password, name } = request.body as { email: string; password: string; name: string };
+  const result = await register(email, password, name);
+  setRefreshTokenCookie(reply, result.refreshToken);
+  return reply.code(201).send({
+    user: result.user,
+    accessToken: result.accessToken,
+  });
 }
 
-export async function loginHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const { email, password } = req.body;
-    const result = await login(email, password);
-    setRefreshTokenCookie(res, result.refreshToken);
-    res.json({
-      user: result.user,
-      accessToken: result.accessToken,
-    });
-  } catch (error) {
-    next(error);
-  }
+export async function loginHandler(request: FastifyRequest, reply: FastifyReply) {
+  const { email, password } = request.body as { email: string; password: string };
+  const result = await login(email, password);
+  setRefreshTokenCookie(reply, result.refreshToken);
+  return reply.send({
+    user: result.user,
+    accessToken: result.accessToken,
+  });
 }
 
-export async function refreshHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const token = req.cookies?.refreshToken || req.body?.refreshToken;
-    if (!token) {
-      res.status(401).json({ message: "Refresh token required" });
-      return;
-    }
-    const result = await refreshToken(token);
-    setRefreshTokenCookie(res, result.refreshToken);
-    res.json({
-      user: result.user,
-      accessToken: result.accessToken,
-    });
-  } catch (error) {
-    next(error);
+export async function refreshHandler(request: FastifyRequest, reply: FastifyReply) {
+  const body = request.body as any;
+  const token = request.cookies?.refreshToken || body?.refreshToken;
+  if (!token) {
+    return reply.code(401).send({ message: "Refresh token required" });
   }
+  const result = await refreshToken(token);
+  setRefreshTokenCookie(reply, result.refreshToken);
+  return reply.send({
+    user: result.user,
+    accessToken: result.accessToken,
+  });
 }
 
-export async function meHandler(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = req.userId!;
-    const user = await getMe(userId);
-    res.json(user);
-  } catch (error) {
-    next(error);
-  }
+export async function meHandler(request: FastifyRequest, reply: FastifyReply) {
+  const userId = request.userId!;
+  const user = await getMe(userId);
+  return reply.send(user);
 }
 
-export function logoutHandler(_req: Request, res: Response) {
-  res.clearCookie("refreshToken", { path: "/api/auth" });
-  res.json({ message: "Logged out" });
+export async function logoutHandler(_request: FastifyRequest, reply: FastifyReply) {
+  reply.clearCookie("refreshToken", { path: "/api/auth" });
+  return reply.send({ message: "Logged out" });
 }

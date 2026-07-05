@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate, authorize } from "../../common/guards/auth.guard";
 import {
   listProjects,
@@ -9,19 +9,22 @@ import {
   addMember,
   removeMember,
   updateMemberRole,
+  addExclusion,
+  removeExclusion,
+  getExclusions,
 } from "./project.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/", listProjects);
-router.get("/:id", getProject);
-router.post("/", authorize("lead", "admin"), createProject);
-router.put("/:id", updateProject);
-router.delete("/:id", deleteProject);
-router.post("/:id/members", addMember);
-router.put("/:id/members/:userId", updateMemberRole);
-router.delete("/:id/members/:userId", removeMember);
-
-export { router as projectRouter };
+export async function projectPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/", listProjects);
+  fastify.get("/:id", getProject);
+  fastify.post("/", { preHandler: [authorize("lead", "admin")] }, createProject);
+  fastify.put("/:id", updateProject);
+  fastify.delete("/:id", deleteProject);
+  fastify.post("/:id/members", addMember);
+  fastify.put("/:id/members/:userId", updateMemberRole);
+  fastify.delete("/:id/members/:userId", removeMember);
+  fastify.get("/:id/exclusions", getExclusions);
+  fastify.post("/:id/exclusions", addExclusion);
+  fastify.delete("/:id/exclusions/:userId", removeExclusion);
+}

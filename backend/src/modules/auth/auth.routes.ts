@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import {
   registerHandler,
@@ -8,12 +8,10 @@ import {
   logoutHandler,
 } from "./auth.controller";
 
-const router = Router();
-
-router.post("/register", registerHandler);
-router.post("/login", loginHandler);
-router.post("/refresh", refreshHandler);
-router.get("/me", authenticate, meHandler);
-router.post("/logout", logoutHandler);
-
-export { router as authRouter };
+export async function authPlugin(fastify: FastifyInstance) {
+  fastify.post("/register", registerHandler);
+  fastify.post("/login", loginHandler);
+  fastify.post("/refresh", refreshHandler);
+  fastify.get("/me", { preHandler: [authenticate] }, meHandler);
+  fastify.post("/logout", logoutHandler);
+}

@@ -1,4 +1,4 @@
-import type { User, Project, ProjectMember, Task, Tag, Comment, Attachment, Notification, AuditLog, AuthResponse, PaginatedResponse } from "../types/api";
+import type { User, Project, ProjectMember, Task, Tag, Comment, Attachment, Notification, AuditLog, AuthResponse, PaginatedResponse, Sprint } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -17,9 +17,11 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...((options.headers as Record<string, string>) || {}),
   };
+  if (options.body && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (accessToken) {
     headers["Authorization"] = `Bearer ${accessToken}`;
@@ -115,9 +117,9 @@ export const tasksApi = {
     return request<Task[]>(`/tasks${query}`);
   },
   get: (id: string) => request<Task>(`/tasks/${id}`),
-  create: (data: { title: string; description?: string; priority?: string; assigneeId?: string; dueDate?: string; projectId: string; tagIds?: string[] }) =>
+  create: (data: { title: string; description?: string; priority?: string; assigneeId?: string; sprintId?: string | null; dueDate?: string; projectId: string; tagIds?: string[] }) =>
     request<Task>("/tasks", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: string, data: { title?: string; description?: string; priority?: string; assigneeId?: string; dueDate?: string; tagIds?: string[] }) =>
+  update: (id: string, data: { title?: string; description?: string; priority?: string; assigneeId?: string; sprintId?: string | null; dueDate?: string; tagIds?: string[] }) =>
     request<Task>(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: string) =>
     request<void>(`/tasks/${id}`, { method: "DELETE" }),
@@ -191,16 +193,24 @@ export const attachmentsApi = {
 
 // Analytics
 export const analyticsApi = {
-  burndown: (projectId: string) =>
-    request<{ date: string; ideal: number; actual: number }[]>(`/analytics/burndown?projectId=${projectId}`),
-  velocity: (projectId: string) =>
-    request<{ sprint: string; completed: number; planned: number }[]>(`/analytics/velocity?projectId=${projectId}`),
-  taskStats: (projectId: string) =>
-    request<{ total: number; byStatus: { status: string; _count: number }[]; byPriority: { priority: string; _count: number }[]; byAssignee: { assigneeId: string; _count: number }[] }>(`/analytics/tasks?projectId=${projectId}`),
+  burndown: (projectId: string, sprintId?: string) => {
+    const params = `?projectId=${projectId}${sprintId ? `&sprintId=${sprintId}` : ""}`;
+    return request<{ date: string; ideal: number; actual: number }[]>(`/analytics/burndown${params}`);
+  },
+  velocity: (projectId: string, sprintId?: string) => {
+    const params = `?projectId=${projectId}${sprintId ? `&sprintId=${sprintId}` : ""}`;
+    return request<{ sprint: string; completed: number; planned: number }[]>(`/analytics/velocity${params}`);
+  },
+  taskStats: (projectId: string, sprintId?: string) => {
+    const params = `?projectId=${projectId}${sprintId ? `&sprintId=${sprintId}` : ""}`;
+    return request<{ total: number; byStatus: { status: string; _count: number }[]; byPriority: { priority: string; _count: number }[]; byAssignee: { assigneeId: string; _count: number }[] }>(`/analytics/tasks${params}`);
+  },
   exportData: (projectId: string, format: string = "csv") =>
     request<any>(`/analytics/export?projectId=${projectId}&format=${format}`),
-  exportPdfUrl: (projectId: string) =>
-    `${API_BASE}/analytics/export?projectId=${projectId}&format=pdf`,
+  exportPdfUrl: (projectId: string, sprintId?: string) => {
+    const params = `?projectId=${projectId}&format=pdf${sprintId ? `&sprintId=${sprintId}` : ""}`;
+    return `${API_BASE}/analytics/export${params}`;
+  },
 };
 
 // Notifications
@@ -221,8 +231,95 @@ export const auditApi = {
   },
 };
 
+// Sprints
+export const sprintsApi = {
+  list: (projectId: string) =>
+    request<Sprint[]>(`/sprints?projectId=${projectId}`),
+  get: (id: string) => request<Sprint>(`/sprints/${id}`),
+  create: (data: { name: string; description?: string; projectId: string; startDate: string; endDate: string }) =>
+    request<Sprint>("/sprints", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: { name?: string; description?: string; startDate?: string; endDate?: string; isActive?: boolean }) =>
+    request<Sprint>(`/sprints/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request<void>(`/sprints/${id}`, { method: "DELETE" }),
+};
+
+// Search
+export const searchApi = {
+  global: (q: string) => request<{ tasks: any[]; projects: any[]; users: any[] }>(`/search?q=${encodeURIComponent(q)}`),
+};
+
 // Users
 export const usersApi = {
   list: () => request<User[]>("/users"),
   get: (id: string) => request<User>(`/users/${id}`),
+  search: (q: string) => request<User[]>(`/users/search?q=${encodeURIComponent(q)}`),
+  delete: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
+};
+
+// Teams
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  members: TeamMember[];
+  projects: TeamProject[];
+  _count: { members: number; projects: number };
+}
+
+export interface TeamMember {
+  id: string;
+  userId: string;
+  teamId: string;
+  role: string;
+  createdAt: string;
+  user: User;
+}
+
+export interface TeamProject {
+  id: string;
+  projectId: string;
+  teamId: string;
+  createdAt: string;
+  project: Project;
+}
+
+export interface ProjectExclusion {
+  id: string;
+  projectId: string;
+  userId: string;
+  createdAt: string;
+  user: User;
+}
+
+export const teamsApi = {
+  list: () => request<Team[]>("/teams"),
+  get: (id: string) => request<Team>(`/teams/${id}`),
+  create: (data: { name: string; description?: string }) =>
+    request<Team>("/teams", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: { name?: string; description?: string }) =>
+    request<Team>(`/teams/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/teams/${id}`, { method: "DELETE" }),
+  addMember: (id: string, data: { userId: string; role: string }) =>
+    request<TeamMember>(`/teams/${id}/members`, { method: "POST", body: JSON.stringify(data) }),
+  removeMember: (id: string, memberId: string) =>
+    request<void>(`/teams/${id}/members/${memberId}`, { method: "DELETE" }),
+  assignProject: (id: string, data: { projectId: string }) =>
+    request<TeamProject>(`/teams/${id}/projects`, { method: "POST", body: JSON.stringify(data) }),
+  unassignProject: (id: string, projectId: string) =>
+    request<void>(`/teams/${id}/projects/${projectId}`, { method: "DELETE" }),
+};
+
+// Project Exclusions
+export const exclusionsApi = {
+  list: (projectId: string) => request<ProjectExclusion[]>(`/projects/${projectId}/exclusions`),
+  add: (projectId: string, userId: string) =>
+    request<ProjectExclusion>(`/projects/${projectId}/exclusions`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }),
+  remove: (projectId: string, exclusionId: string) =>
+    request<void>(`/projects/${projectId}/exclusions/${exclusionId}`, { method: "DELETE" }),
 };

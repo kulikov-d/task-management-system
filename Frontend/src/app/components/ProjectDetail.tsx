@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
-import { ArrowLeft, Settings, Shield, Code, Eye } from "lucide-react";
+import { ArrowLeft, Settings, Shield, Code } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 import { useAuthStore } from "../stores/authStore";
 import { projectsApi } from "../api/client";
@@ -11,7 +11,6 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; icon: any }> =
   admin: { label: "Администратор", color: "#ef4444", icon: Shield },
   lead: { label: "Тимлид", color: "#f59e0b", icon: Shield },
   developer: { label: "Разработчик", color: "#6366f1", icon: Code },
-  viewer: { label: "Наблюдатель", color: "#6b7280", icon: Eye },
 };
 
 export function ProjectDetail() {
@@ -119,7 +118,7 @@ export function ProjectDetail() {
       {tab === "members" && (
         <div className="rounded-xl overflow-hidden" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
           {(project.members || []).map((m: any, i: number) => {
-            const cfg = ROLE_CONFIG[m.role] || ROLE_CONFIG.viewer;
+            const cfg = ROLE_CONFIG[m.role] || ROLE_CONFIG.developer;
             const RoleIcon = cfg.icon;
             return (
               <div key={m.id} className="flex items-center gap-3 px-4 py-3"

@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcrypt";
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
@@ -15,28 +15,41 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-function generateTokens(user: { id: string; email: string; role: string }): TokenPair {
-  const accessToken = jwt.sign(
-    { userId: user.id, email: user.email, role: user.role },
-    env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN } as any
-  );
+function encodeSecret(secret: string): Uint8Array {
+  return new TextEncoder().encode(secret);
+}
 
-  const refreshToken = jwt.sign(
-    { userId: user.id, type: "refresh" },
-    env.JWT_REFRESH_SECRET,
-    { expiresIn: env.JWT_REFRESH_EXPIRES_IN } as any
-  );
+async function generateTokens(user: { id: string; email: string; role: string }): Promise<TokenPair> {
+  const accessToken = await new SignJWT({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(env.JWT_EXPIRES_IN)
+    .sign(encodeSecret(env.JWT_SECRET));
+
+  const refreshToken = await new SignJWT({
+    userId: user.id,
+    type: "refresh",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(env.JWT_REFRESH_EXPIRES_IN)
+    .sign(encodeSecret(env.JWT_REFRESH_SECRET));
 
   return { accessToken, refreshToken };
 }
 
-export function verifyAccessToken(token: string): JwtPayload {
-  return jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+export async function verifyAccessToken(token: string): Promise<JwtPayload> {
+  const { payload } = await jwtVerify(token, encodeSecret(env.JWT_SECRET));
+  return payload as unknown as JwtPayload;
 }
 
-function verifyRefreshToken(token: string): { userId: string } {
-  return jwt.verify(token, env.JWT_REFRESH_SECRET) as { userId: string };
+async function verifyRefreshToken(token: string): Promise<{ userId: string }> {
+  const { payload } = await jwtVerify(token, encodeSecret(env.JWT_REFRESH_SECRET));
+  return payload as unknown as { userId: string };
 }
 
 export async function register(
@@ -56,7 +69,7 @@ export async function register(
     select: { id: true, email: true, name: true, role: true, createdAt: true },
   });
 
-  const tokens = generateTokens(user);
+  const tokens = await generateTokens(user);
 
   return { user, ...tokens };
 }
@@ -72,7 +85,7 @@ export async function login(email: string, password: string) {
     throw new AppError("Invalid email or password", 401);
   }
 
-  const tokens = generateTokens(user);
+  const tokens = await generateTokens(user);
 
   return {
     user: {
@@ -88,7 +101,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function refreshToken(token: string) {
-  const payload = verifyRefreshToken(token);
+  const payload = await verifyRefreshToken(token);
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
@@ -99,7 +112,7 @@ export async function refreshToken(token: string) {
     throw new AppError("User not found", 401);
   }
 
-  const tokens = generateTokens(user);
+  const tokens = await generateTokens(user);
 
   return { user, ...tokens };
 }

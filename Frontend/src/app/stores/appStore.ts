@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { projectsApi, tasksApi, tagsApi, usersApi, notificationsApi, auditApi, analyticsApi } from "../api/client";
-import type { Project, Task, Tag, User, Notification, AuditLog } from "../types/api";
+import { projectsApi, tasksApi, tagsApi, usersApi, notificationsApi, auditApi, analyticsApi, sprintsApi, commentsApi, attachmentsApi } from "../api/client";
+import type { Project, Task, Tag, User, Notification, AuditLog, Sprint, Comment, Attachment } from "../types/api";
 
 interface AppState {
   projects: Project[];
@@ -11,6 +11,10 @@ interface AppState {
   notifications: Notification[];
   unreadCount: number;
   auditLogs: AuditLog[];
+  sprints: Sprint[];
+  selectedSprintId: string | null;
+  comments: Record<string, Comment[]>;
+  attachments: Record<string, Attachment[]>;
   burndownData: any[];
   velocityData: any[];
   taskStats: any;
@@ -24,9 +28,18 @@ interface AppState {
   loadNotifications: () => Promise<void>;
   loadUnreadCount: () => Promise<void>;
   loadAuditLogs: (params?: Record<string, string>) => Promise<void>;
-  loadBurndown: (projectId: string) => Promise<void>;
-  loadVelocity: (projectId: string) => Promise<void>;
-  loadTaskStats: (projectId: string) => Promise<void>;
+  loadSprints: (projectId: string) => Promise<void>;
+  setSelectedSprintId: (sprintId: string | null) => void;
+  loadComments: (taskId: string) => Promise<void>;
+  addCommentToTask: (taskId: string, comment: Comment) => void;
+  updateCommentInTask: (taskId: string, commentId: string, content: string) => void;
+  removeCommentFromTask: (taskId: string, commentId: string) => void;
+  loadAttachments: (taskId: string) => Promise<void>;
+  addAttachmentToTask: (taskId: string, attachment: Attachment) => void;
+  removeAttachmentFromTask: (taskId: string, attachmentId: string) => void;
+  loadBurndown: (projectId: string, sprintId?: string | null) => Promise<void>;
+  loadVelocity: (projectId: string, sprintId?: string | null) => Promise<void>;
+  loadTaskStats: (projectId: string, sprintId?: string | null) => Promise<void>;
 
   createTask: (data: any) => Promise<Task>;
   updateTask: (id: string, data: any) => Promise<Task>;
@@ -38,6 +51,15 @@ interface AppState {
   addTask: (task: Task) => void;
   updateTaskInState: (task: Task) => void;
   removeTask: (taskId: string) => void;
+
+  addProject: (project: Project) => void;
+  updateProjectInState: (project: Project) => void;
+  removeProject: (projectId: string) => void;
+  deleteUser: (userId: string) => Promise<void>;
+  addSprint: (sprint: Sprint) => void;
+  updateSprintInState: (sprint: Sprint) => void;
+  removeSprint: (sprintId: string) => void;
+  refreshProject: (projectId: string) => Promise<void>;
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -49,6 +71,10 @@ export const useAppStore = create<AppState>()((set, get) => ({
   notifications: [],
   unreadCount: 0,
   auditLogs: [],
+  sprints: [],
+  selectedSprintId: null,
+  comments: {},
+  attachments: {},
   burndownData: [],
   velocityData: [],
   taskStats: null,
@@ -57,12 +83,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
   loadProjects: async () => {
     try {
       const projects = await projectsApi.list();
-      set({ projects });
-      if (projects.length > 0 && !get().currentProject) {
-        const withTasks = projects.filter((p: any) => (p._count?.tasks || 0) > 0);
-        const best = withTasks.length > 0 ? withTasks[0] : projects[0];
-        set({ currentProject: best });
-      }
+      set((state) => {
+        const currentStillExists = state.currentProject && projects.some((p: any) => p.id === state.currentProject!.id);
+        return {
+          projects,
+          currentProject: currentStillExists ? state.currentProject : projects[0] || null,
+        };
+      });
     } catch (err) {
       console.error("Failed to load projects:", err);
     }
@@ -126,27 +153,103 @@ export const useAppStore = create<AppState>()((set, get) => ({
     }
   },
 
-  loadBurndown: async (projectId) => {
+  loadSprints: async (projectId) => {
     try {
-      const burndownData = await analyticsApi.burndown(projectId);
+      const sprints = await sprintsApi.list(projectId);
+      set({ sprints });
+    } catch (err) {
+      console.error("Failed to load sprints:", err);
+    }
+  },
+
+  setSelectedSprintId: (sprintId) => {
+    set({ selectedSprintId: sprintId });
+  },
+
+  loadComments: async (taskId) => {
+    try {
+      const comments = await commentsApi.list(taskId);
+      set((state) => ({ comments: { ...state.comments, [taskId]: comments } }));
+    } catch (err) {
+      console.error("Failed to load comments:", err);
+    }
+  },
+
+  addCommentToTask: (taskId, comment) =>
+    set((state) => ({
+      comments: {
+        ...state.comments,
+        [taskId]: [...(state.comments[taskId] || []), comment],
+      },
+    })),
+
+  updateCommentInTask: (taskId, commentId, content) =>
+    set((state) => ({
+      comments: {
+        ...state.comments,
+        [taskId]: (state.comments[taskId] || []).map((c) =>
+          c.id === commentId ? { ...c, content } : c
+        ),
+      },
+    })),
+
+  removeCommentFromTask: (taskId, commentId) =>
+    set((state) => ({
+      comments: {
+        ...state.comments,
+        [taskId]: (state.comments[taskId] || []).filter((c) => c.id !== commentId),
+      },
+    })),
+
+  loadAttachments: async (taskId) => {
+    try {
+      const attachments = await attachmentsApi.list(taskId);
+      set((state) => ({ attachments: { ...state.attachments, [taskId]: attachments } }));
+    } catch (err) {
+      console.error("Failed to load attachments:", err);
+    }
+  },
+
+  addAttachmentToTask: (taskId, attachment) =>
+    set((state) => ({
+      attachments: {
+        ...state.attachments,
+        [taskId]: [...(state.attachments[taskId] || []), attachment],
+      },
+    })),
+
+  removeAttachmentFromTask: (taskId, attachmentId) =>
+    set((state) => ({
+      attachments: {
+        ...state.attachments,
+        [taskId]: (state.attachments[taskId] || []).filter((a) => a.id !== attachmentId),
+      },
+    })),
+
+  loadBurndown: async (projectId, sprintId) => {
+    try {
+      const sid = sprintId !== undefined ? sprintId : get().selectedSprintId;
+      const burndownData = await analyticsApi.burndown(projectId, sid || undefined);
       set({ burndownData });
     } catch (err) {
       console.error("Failed to load burndown:", err);
     }
   },
 
-  loadVelocity: async (projectId) => {
+  loadVelocity: async (projectId, sprintId) => {
     try {
-      const velocityData = await analyticsApi.velocity(projectId);
+      const sid = sprintId !== undefined ? sprintId : get().selectedSprintId;
+      const velocityData = await analyticsApi.velocity(projectId, sid || undefined);
       set({ velocityData });
     } catch (err) {
       console.error("Failed to load velocity:", err);
     }
   },
 
-  loadTaskStats: async (projectId) => {
+  loadTaskStats: async (projectId, sprintId) => {
     try {
-      const taskStats = await analyticsApi.taskStats(projectId);
+      const sid = sprintId !== undefined ? sprintId : get().selectedSprintId;
+      const taskStats = await analyticsApi.taskStats(projectId, sid || undefined);
       set({ taskStats });
     } catch (err) {
       console.error("Failed to load task stats:", err);
@@ -202,4 +305,59 @@ export const useAppStore = create<AppState>()((set, get) => ({
     set((state) => ({
       tasks: state.tasks.filter((t) => t.id !== taskId),
     })),
+
+  addProject: (project) =>
+    set((state) => ({
+      projects: [...state.projects, project],
+    })),
+
+  updateProjectInState: (project) =>
+    set((state) => ({
+      projects: state.projects.map((p) => (p.id === project.id ? { ...p, ...project } : p)),
+      currentProject: state.currentProject?.id === project.id ? { ...state.currentProject, ...project } : state.currentProject,
+    })),
+
+  removeProject: (projectId) =>
+    set((state) => {
+      const remaining = state.projects.filter((p) => p.id !== projectId);
+      const newCurrent = state.currentProject?.id === projectId ? remaining[0] || null : state.currentProject;
+      return {
+        projects: remaining,
+        currentProject: newCurrent,
+      };
+    }),
+
+  deleteUser: async (userId) => {
+    await usersApi.delete(userId);
+    set((state) => ({
+      users: state.users.filter((u) => u.id !== userId),
+    }));
+  },
+
+  addSprint: (sprint) =>
+    set((state) => ({
+      sprints: [...state.sprints, sprint],
+    })),
+
+  updateSprintInState: (sprint) =>
+    set((state) => ({
+      sprints: state.sprints.map((s) => (s.id === sprint.id ? { ...s, ...sprint } : s)),
+    })),
+
+  removeSprint: (sprintId) =>
+    set((state) => ({
+      sprints: state.sprints.filter((s) => s.id !== sprintId),
+    })),
+
+  refreshProject: async (projectId) => {
+    try {
+      const project = await projectsApi.get(projectId);
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === projectId ? { ...p, ...project } : p)),
+        currentProject: state.currentProject?.id === projectId ? { ...state.currentProject, ...project } : state.currentProject,
+      }));
+    } catch (err) {
+      console.error("Failed to refresh project:", err);
+    }
+  },
 }));

@@ -1,84 +1,148 @@
 import { useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import { getAccessToken } from "../api/client";
 import { useAppStore } from "../stores/appStore";
 
-const WS_URL = import.meta.env.VITE_WS_URL || "http://localhost:3000";
+let ws: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT = 10;
+const BASE_DELAY = 1000;
 
-let socket: Socket | null = null;
+function getWsUrl(): string {
+  const token = getAccessToken();
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/ws?token=${token}`;
+}
+
+function connect(onOpen?: () => void) {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  ws = new WebSocket(getWsUrl());
+
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+    onOpen?.();
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const { event: eventName, data } = JSON.parse(event.data);
+      handlers.forEach((h) => h(eventName, data));
+    } catch {}
+  };
+
+  ws.onclose = () => {
+    ws = null;
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    ws?.close();
+  };
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  if (reconnectAttempts >= MAX_RECONNECT) return;
+  const delay = BASE_DELAY * Math.pow(1.5, reconnectAttempts);
+  reconnectAttempts++;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect(lastJoinCallback);
+  }, delay);
+}
+
+function send(event: string, data: any = {}) {
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ event, data }));
+  }
+}
+
+// Global handler list
+type Handler = (event: string, data: any) => void;
+const handlers = new Set<Handler>();
+function addHandler(h: Handler) { handlers.add(h); }
+function removeHandler(h: Handler) { handlers.delete(h); }
+
+let lastJoinCallback: (() => void) | null = null;
 
 export function useSocket() {
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const currentProjectIdRef = useRef<string | null>(null);
   const addTask = useAppStore((s) => s.addTask);
   const updateTaskInState = useAppStore((s) => s.updateTaskInState);
   const removeTask = useAppStore((s) => s.removeTask);
   const loadUnreadCount = useAppStore((s) => s.loadUnreadCount);
+  const addProject = useAppStore((s) => s.addProject);
+  const updateProjectInState = useAppStore((s) => s.updateProjectInState);
+  const removeProject = useAppStore((s) => s.removeProject);
+  const refreshProject = useAppStore((s) => s.refreshProject);
+  const addSprint = useAppStore((s) => s.addSprint);
+  const updateSprintInState = useAppStore((s) => s.updateSprintInState);
+  const removeSprint = useAppStore((s) => s.removeSprint);
+  const loadProjects = useAppStore((s) => s.loadProjects);
+  const addCommentToTask = useAppStore((s) => s.addCommentToTask);
 
   useEffect(() => {
     const token = getAccessToken();
     if (!token) return;
 
-    if (!socket) {
-      socket = io(WS_URL, {
-        auth: { token },
-        transports: ["websocket", "polling"],
-      });
-
-      socket.on("connect", () => {
-        console.log("✓ WebSocket connected");
-      });
-
-      socket.on("disconnect", () => {
-        console.log("✗ WebSocket disconnected");
-      });
-    }
-
-    const onTaskCreated = (task: any) => addTask(task);
-    const onTaskUpdated = (task: any) => updateTaskInState(task);
-    const onTaskAssigned = ({ task }: any) => updateTaskInState(task);
-    const onTaskStatusChanged = ({ task }: any) => updateTaskInState(task);
-    const onTaskMoved = ({ task }: any) => updateTaskInState(task);
-    const onTaskDeleted = ({ taskId }: any) => removeTask(taskId);
-    const onNotificationNew = () => loadUnreadCount();
-
-    socket.on("task:created", onTaskCreated);
-    socket.on("task:updated", onTaskUpdated);
-    socket.on("task:assigned", onTaskAssigned);
-    socket.on("task:statusChanged", onTaskStatusChanged);
-    socket.on("task:moved", onTaskMoved);
-    socket.on("task:deleted", onTaskDeleted);
-    socket.on("notification:new", onNotificationNew);
-
-    socketRef.current = socket;
-
-    return () => {
-      if (socket) {
-        socket.off("task:created", onTaskCreated);
-        socket.off("task:updated", onTaskUpdated);
-        socket.off("task:assigned", onTaskAssigned);
-        socket.off("task:statusChanged", onTaskStatusChanged);
-        socket.off("task:moved", onTaskMoved);
-        socket.off("task:deleted", onTaskDeleted);
-        socket.off("notification:new", onNotificationNew);
+    const onEvent = (event: string, data: any) => {
+      switch (event) {
+        case "task:created": addTask(data); break;
+        case "task:updated": updateTaskInState(data); break;
+        case "task:assigned": updateTaskInState(data.task); break;
+        case "task:statusChanged": updateTaskInState(data.task); break;
+        case "task:moved": updateTaskInState(data.task); break;
+        case "task:deleted": removeTask(data.taskId); break;
+        case "notification:new": loadUnreadCount(); break;
+        case "project:created": addProject(data); loadProjects(); break;
+        case "project:updated": updateProjectInState(data); break;
+        case "project:deleted": removeProject(data.projectId); loadProjects(); break;
+        case "project:memberAdded": refreshProject(data.projectId); break;
+        case "project:memberRemoved": refreshProject(data.projectId); break;
+        case "sprint:created": addSprint(data); break;
+        case "sprint:updated": updateSprintInState(data); break;
+        case "sprint:deleted": removeSprint(data.sprintId); break;
+        case "comment:new": addCommentToTask(data.taskId, data.comment); break;
       }
     };
-  }, [addTask, updateTaskInState, removeTask, loadUnreadCount]);
+
+    addHandler(onEvent);
+
+    const onOpen = () => {
+      if (currentProjectIdRef.current) {
+        send("join:project", { projectId: currentProjectIdRef.current });
+      }
+    };
+
+    lastJoinCallback = onOpen;
+    connect(onOpen);
+
+    return () => {
+      removeHandler(onEvent);
+    };
+  }, [addTask, updateTaskInState, removeTask, loadUnreadCount, addProject, updateProjectInState, removeProject, refreshProject, addSprint, updateSprintInState, removeSprint, loadProjects, addCommentToTask]);
 
   const joinProject = useCallback((projectId: string) => {
-    socket?.emit("join:project", projectId);
+    currentProjectIdRef.current = projectId;
+    send("join:project", { projectId });
   }, []);
 
   const leaveProject = useCallback((projectId: string) => {
-    socket?.emit("leave:project", projectId);
+    send("leave:project", { projectId });
+    if (currentProjectIdRef.current === projectId) {
+      currentProjectIdRef.current = null;
+    }
   }, []);
 
   const joinTask = useCallback((taskId: string) => {
-    socket?.emit("join:task", taskId);
+    send("join:task", { taskId });
   }, []);
 
   const leaveTask = useCallback((taskId: string) => {
-    socket?.emit("leave:task", taskId);
+    send("leave:task", { taskId });
   }, []);
 
-  return { socket: socketRef.current, joinProject, leaveProject, joinTask, leaveTask };
+  return { socket: ws, joinProject, leaveProject, joinTask, leaveTask };
 }

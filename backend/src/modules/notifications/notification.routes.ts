@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import {
   listNotifications,
@@ -7,13 +7,10 @@ import {
   getUnreadCount,
 } from "./notification.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/", listNotifications);
-router.get("/unread", getUnreadCount);
-router.put("/:id/read", markAsRead);
-router.put("/read-all", markAllAsRead);
-
-export { router as notificationRouter };
+export async function notificationPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/", listNotifications);
+  fastify.get("/unread", getUnreadCount);
+  fastify.put("/:id/read", markAsRead);
+  fastify.put("/read-all", markAllAsRead);
+}

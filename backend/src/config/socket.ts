@@ -1,88 +1,130 @@
 import { Server as HttpServer } from "http";
-import { Server, Socket } from "socket.io";
-import { env } from "./env";
+import { WebSocketServer, WebSocket } from "ws";
+import { URL } from "url";
 import { verifyAccessToken } from "../modules/auth/auth.service";
 
-let io: Server;
+let wss: WebSocketServer;
 
-export function initSocket(server: HttpServer): Server {
-  const allowedOrigins = env.FRONTEND_URL.split(",").map((s) => s.trim());
+const rooms = new Map<string, Set<WebSocket>>();
 
-  io = new Server(server, {
-    cors: {
-      origin: allowedOrigins,
-      credentials: true,
-    },
-    transports: ["websocket", "polling"],
-  });
+function joinRoom(ws: WebSocket, roomId: string) {
+  if (!rooms.has(roomId)) rooms.set(roomId, new Set());
+  rooms.get(roomId)!.add(ws);
+}
 
-  io.use(async (socket: Socket, next) => {
+function leaveRoom(ws: WebSocket, roomId: string) {
+  const room = rooms.get(roomId);
+  if (room) {
+    room.delete(ws);
+    if (room.size === 0) rooms.delete(roomId);
+  }
+}
+
+function leaveAllRooms(ws: WebSocket) {
+  for (const [roomId, room] of rooms) {
+    room.delete(ws);
+    if (room.size === 0) rooms.delete(roomId);
+  }
+}
+
+function sendTo(ws: WebSocket, event: string, data: any) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ event, data }));
+  }
+}
+
+function broadcastToRoom(roomId: string, event: string, data: any, exclude?: WebSocket) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  for (const ws of room) {
+    if (ws !== exclude && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ event, data }));
+    }
+  }
+}
+
+function getUserIdFromWs(ws: WebSocket): string | undefined {
+  return (ws as any).userId;
+}
+
+export function initSocket(server: HttpServer): WebSocketServer {
+  wss = new WebSocketServer({ server, path: "/ws" });
+
+  wss.on("upgrade", async (request, socket, head) => {
     try {
-      const token =
-        socket.handshake.auth?.token ||
-        socket.handshake.headers?.authorization?.replace("Bearer ", "");
+      const url = new URL(request.url || "/", `http://${request.headers.host}`);
+      const token = url.searchParams.get("token");
 
       if (!token) {
-        return next(new Error("Authentication required"));
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
       }
 
-      const payload = verifyAccessToken(token);
+      const payload = await verifyAccessToken(token);
       (socket as any).userId = payload.userId;
       (socket as any).userRole = payload.role;
-      next();
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
     } catch {
-      next(new Error("Invalid token"));
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
     }
   });
 
-  io.on("connection", (socket: Socket) => {
-    const userId = (socket as any).userId;
+  wss.on("connection", (ws: WebSocket) => {
+    const userId = (ws as any).userId as string;
     console.log(`✓ User connected: ${userId}`);
 
-    socket.join(`user:${userId}`);
+    joinRoom(ws, `user:${userId}`);
+    joinRoom(ws, "projects:global");
 
-    socket.on("join:project", (projectId: string) => {
-      socket.join(`project:${projectId}`);
-      socket.to(`project:${projectId}`).emit("user:joined", { userId });
+    ws.on("message", (raw: Buffer) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        const { event, data } = msg;
+
+        if (event === "join:project") {
+          joinRoom(ws, `project:${data.projectId}`);
+          console.log(`✓ User ${userId} joined project:${data.projectId}`);
+          broadcastToRoom(`project:${data.projectId}`, "user:joined", { userId }, ws);
+        } else if (event === "leave:project") {
+          broadcastToRoom(`project:${data.projectId}`, "user:left", { userId }, ws);
+          leaveRoom(ws, `project:${data.projectId}`);
+        } else if (event === "join:task") {
+          joinRoom(ws, `task:${data.taskId}`);
+        } else if (event === "leave:task") {
+          leaveRoom(ws, `task:${data.taskId}`);
+        }
+      } catch {}
     });
 
-    socket.on("leave:project", (projectId: string) => {
-      socket.leave(`project:${projectId}`);
-      socket.to(`project:${projectId}`).emit("user:left", { userId });
-    });
-
-    socket.on("join:task", (taskId: string) => {
-      socket.join(`task:${taskId}`);
-    });
-
-    socket.on("leave:task", (taskId: string) => {
-      socket.leave(`task:${taskId}`);
-    });
-
-    socket.on("disconnect", () => {
+    ws.on("close", () => {
+      leaveAllRooms(ws);
       console.log(`✗ User disconnected: ${userId}`);
     });
   });
 
-  console.log("✓ Socket.IO initialized");
-  return io;
-}
-
-export function getIO(): Server {
-  if (!io) {
-    throw new Error("Socket.IO not initialized");
-  }
-  return io;
+  console.log("✓ WebSocket (ws) initialized");
+  return wss;
 }
 
 export function emitToProject(projectId: string, event: string, data: any) {
-  io?.to(`project:${projectId}`).emit(event, data);
+  const roomSize = rooms.get(`project:${projectId}`)?.size || 0;
+  console.log(`→ Emitting "${event}" to project:${projectId} (${roomSize} listeners)`);
+  broadcastToRoom(`project:${projectId}`, event, data);
 }
 
 export function emitToTask(taskId: string, event: string, data: any) {
-  io?.to(`task:${taskId}`).emit(event, data);
+  broadcastToRoom(`task:${taskId}`, event, data);
 }
 
 export function emitToUser(userId: string, event: string, data: any) {
-  io?.to(`user:${userId}`).emit(event, data);
+  broadcastToRoom(`user:${userId}`, event, data);
+}
+
+export function emitToAll(event: string, data: any) {
+  broadcastToRoom("projects:global", event, data);
 }

@@ -1,26 +1,25 @@
-import { Request, Response, NextFunction } from "express";
+import { FastifyError } from "fastify";
 import { ZodError } from "zod";
 import { AppError } from "./AppError";
 
 export function errorHandler(
-  err: Error,
-  _req: Request,
-  res: Response,
-  _next: NextFunction
+  error: FastifyError | AppError | ZodError | Error,
+  _request: any,
+  reply: any
 ) {
-  if (err instanceof AppError) {
-    res.status(err.statusCode).json({
-      message: err.message,
-      statusCode: err.statusCode,
+  if (error instanceof AppError) {
+    reply.code(error.statusCode).send({
+      message: error.message,
+      statusCode: error.statusCode,
     });
     return;
   }
 
-  if (err instanceof ZodError) {
-    res.status(400).json({
+  if (error instanceof ZodError) {
+    reply.code(400).send({
       message: "Validation error",
       statusCode: 400,
-      errors: err.errors.map((e) => ({
+      errors: error.errors.map((e) => ({
         path: e.path.join("."),
         message: e.message,
       })),
@@ -28,10 +27,10 @@ export function errorHandler(
     return;
   }
 
-  const statusCode = (err as any).statusCode || 500;
-  console.error(`Unhandled error (${statusCode}):`, err.message);
-  res.status(statusCode).json({
-    message: statusCode === 500 ? "Internal server error" : err.message,
+  const statusCode = (error as any).statusCode || 500;
+  console.error(`Unhandled error (${statusCode}):`, error.message);
+  reply.code(statusCode).send({
+    message: statusCode === 500 ? "Internal server error" : error.message,
     statusCode,
   });
 }

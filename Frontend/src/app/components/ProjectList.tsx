@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Plus, Users, Flame } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useAppStore } from "../stores/appStore";
+import { useAuthStore } from "../stores/authStore";
 import { projectsApi } from "../api/client";
 import { getProjectColor } from "../utils/helpers";
+import { canManageProject } from "../utils/permissions";
 
 export function ProjectList() {
   const projects = useAppStore((s) => s.projects);
   const tasks = useAppStore((s) => s.tasks);
+  const currentUser = useAuthStore((s) => s.user);
   const loadProjects = useAppStore((s) => s.loadProjects);
   const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
@@ -36,9 +39,11 @@ export function ProjectList() {
           <h2 style={{ color: "var(--foreground)" }}>Проекты</h2>
           <p style={{ color: "var(--muted-foreground)", fontSize: "0.8rem", marginTop: "0.125rem" }}>{projects.length} проектов</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity" style={{ background: "var(--primary)", color: "#fff", fontSize: "0.78rem" }}>
-          <Plus size={14} /> Создать проект
-        </button>
+        {canManageProject(currentUser) && (
+          <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity" style={{ background: "var(--primary)", color: "#fff", fontSize: "0.78rem" }}>
+            <Plus size={14} /> Создать проект
+          </button>
+        )}
       </div>
 
       {showForm && (

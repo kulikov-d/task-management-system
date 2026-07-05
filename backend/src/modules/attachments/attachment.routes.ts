@@ -1,20 +1,16 @@
-import { Router } from "express";
+import { FastifyInstance } from "fastify";
 import { authenticate } from "../../common/guards/auth.guard";
 import {
-  upload,
   listAttachments,
   uploadAttachment,
   downloadAttachment,
   deleteAttachment,
 } from "./attachment.service";
 
-const router = Router();
-
-router.use(authenticate);
-
-router.get("/tasks/:taskId/attachments", listAttachments);
-router.post("/tasks/:taskId/attachments", upload.single("file"), uploadAttachment);
-router.get("/attachments/:id/download", downloadAttachment);
-router.delete("/attachments/:id", deleteAttachment);
-
-export { router as attachmentRouter };
+export async function attachmentPlugin(fastify: FastifyInstance) {
+  fastify.addHook("onRequest", authenticate);
+  fastify.get("/tasks/:taskId/attachments", listAttachments);
+  fastify.post("/tasks/:taskId/attachments", uploadAttachment);
+  fastify.get("/attachments/:id/download", downloadAttachment);
+  fastify.delete("/attachments/:id", deleteAttachment);
+}

@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Plus, Trash2, Download, Paperclip, MessageSquare } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
-import { getInitials, getUserColor } from "../utils/helpers";
+import { getInitials, getUserColor, getTaskTags } from "../utils/helpers";
 import { TaskForm } from "./TaskForm";
-import { FileUpload } from "./FileUpload";
+import { commentsApi, attachmentsApi } from "../api/client";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   TODO: { label: "К выполнению", color: "#6b7280" },
@@ -19,25 +19,37 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   LOW: { label: "Низкий", color: "#10b981" },
 };
 
-function getTaskTags(task: any, allTags: any[]) {
-  if (!task.tags) return [];
-  return task.tags.map((tt: any) => {
-    if (tt.tag) return tt.tag;
-    return allTags.find((t: any) => t.id === tt);
-  }).filter(Boolean);
-}
-
 export function TaskList({ project }: { project: any }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
   const [selected, setSelected] = useState<any | null>(null);
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<any | null>(null);
   const storeTasks = useAppStore((s) => s.tasks);
   const users = useAppStore((s) => s.users);
   const tags = useAppStore((s) => s.tags);
   const loadTasks = useAppStore((s) => s.loadTasks);
+  const comments = useAppStore((s) => s.comments);
+  const attachments = useAppStore((s) => s.attachments);
+  const loadComments = useAppStore((s) => s.loadComments);
+  const loadAttachments = useAppStore((s) => s.loadAttachments);
+  const addCommentToTask = useAppStore((s) => s.addCommentToTask);
+  const updateCommentInTask = useAppStore((s) => s.updateCommentInTask);
+  const removeCommentFromTask = useAppStore((s) => s.removeCommentFromTask);
+  const addAttachmentToTask = useAppStore((s) => s.addAttachmentToTask);
+  const removeAttachmentFromTask = useAppStore((s) => s.removeAttachmentFromTask);
+  const [newComment, setNewComment] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selected?.id) {
+      loadComments(selected.id);
+      loadAttachments(selected.id);
+    }
+  }, [selected?.id]);
 
   const tasks = storeTasks.filter((t: any) => {
     if (t.projectId !== project.id) return false;
@@ -50,7 +62,6 @@ export function TaskList({ project }: { project: any }) {
   return (
     <div className="flex-1 flex overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Toolbar */}
         <div className="flex items-center gap-3 px-6 py-3 border-b" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
           <div className="relative flex-1 max-w-xs">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--muted-foreground)" }} />
@@ -68,12 +79,11 @@ export function TaskList({ project }: { project: any }) {
             {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
           <span className="ml-auto text-sm" style={{ color: "var(--muted-foreground)" }}>{tasks.length} задач</span>
-          <button onClick={() => setShowCreateForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90" style={{ background: "#6366f1" }}>
+          <button onClick={() => { setEditingTask(null); setShowForm(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition-colors hover:opacity-90" style={{ background: "#6366f1" }}>
             <Plus size={14} /> Задача
           </button>
         </div>
 
-        {/* Table */}
         <div className="flex-1 overflow-y-auto">
           <div className="grid px-6 py-2 border-b sticky top-0" style={{ gridTemplateColumns: "1fr 120px 110px 140px 100px", borderColor: "var(--border)", background: "var(--muted)" }}>
             {["Задача", "Статус", "Приоритет", "Исполнитель", "Дедлайн"].map(h => (
@@ -119,7 +129,6 @@ export function TaskList({ project }: { project: any }) {
         </div>
       </div>
 
-      {/* Side panel */}
       {selected && (
         <div className="w-80 border-l overflow-y-auto p-5 space-y-4 shrink-0" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
           <div className="flex items-start justify-between">
@@ -127,6 +136,13 @@ export function TaskList({ project }: { project: any }) {
             <button onClick={() => setSelected(null)} className="text-sm ml-2" style={{ color: "var(--muted-foreground)" }}>✕</button>
           </div>
           {selected.description && <p style={{ color: "var(--muted-foreground)", fontSize: "0.8rem", lineHeight: 1.5 }}>{selected.description}</p>}
+          <button
+            onClick={() => { setEditingTask(selected); setShowForm(true); }}
+            className="w-full px-3 py-1.5 rounded-lg text-sm font-medium transition-colors hover:opacity-90"
+            style={{ background: "var(--muted)", color: "var(--foreground)", border: "1px solid var(--border)" }}
+          >
+            Редактировать
+          </button>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span style={{ color: "var(--muted-foreground)", fontSize: "0.75rem" }}>Статус</span>
@@ -155,22 +171,88 @@ export function TaskList({ project }: { project: any }) {
               </div>
             </div>
           )}
-          <div>
-            <p style={{ color: "var(--muted-foreground)", fontSize: "0.75rem", marginBottom: "0.5rem" }}>Вложения</p>
-            <FileUpload taskId={selected.id} onUploaded={() => loadTasks(project.id)} />
+
+          <div className="border-t pt-3 space-y-3" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <MessageSquare size={14} style={{ color: "var(--muted-foreground)" }} />
+              <span style={{ color: "var(--muted-foreground)", fontSize: "0.75rem", fontWeight: 500 }}>
+                Комментарии ({(comments[selected.id] || []).length})
+              </span>
+            </div>
+            <div className="space-y-2">
+              {(comments[selected.id] || []).map((c: any) => (
+                <div key={c.id} className="p-2 rounded-lg" style={{ background: "var(--muted)" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-4 h-4 rounded-full flex items-center justify-center text-white" style={{ background: getUserColor(c.authorId), fontSize: "0.4rem", fontWeight: 600 }}>
+                        {getInitials(c.author?.name || "??")}
+                      </div>
+                      <span style={{ fontSize: "0.68rem", fontWeight: 500, color: "var(--foreground)" }}>{c.author?.name}</span>
+                    </div>
+                    <button onClick={async () => { await commentsApi.delete(c.id); removeCommentFromTask(selected.id, c.id); }}
+                      style={{ color: "var(--muted-foreground)", fontSize: "0.65rem" }}>✕</button>
+                  </div>
+                  <p style={{ fontSize: "0.72rem", color: "var(--foreground)", lineHeight: 1.4 }}>{c.content}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input value={newComment} onChange={e => setNewComment(e.target.value)}
+                onKeyDown={async (e) => { if (e.key === "Enter" && newComment.trim() && !sendingComment) { setSendingComment(true); try { const c = await commentsApi.create(selected.id, newComment.trim()); addCommentToTask(selected.id, c); setNewComment(""); } finally { setSendingComment(false); } } }}
+                placeholder="Написать комментарий..."
+                className="flex-1 px-3 py-1.5 rounded-lg border text-sm" style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }} />
+              <button onClick={async () => { if (!newComment.trim() || sendingComment) return; setSendingComment(true); try { const c = await commentsApi.create(selected.id, newComment.trim()); addCommentToTask(selected.id, c); setNewComment(""); } finally { setSendingComment(false); } }}
+                disabled={!newComment.trim() || sendingComment}
+                className="px-3 py-1.5 rounded-lg text-sm text-white disabled:opacity-50" style={{ background: "#6366f1" }}>Отправить</button>
+            </div>
           </div>
-          <button onClick={() => { setEditingTask(selected); setSelected(null); }}
-            className="w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-90" style={{ background: "var(--muted)", color: "var(--foreground)" }}>
-            Редактировать
-          </button>
+
+          <div className="border-t pt-3 space-y-3" style={{ borderColor: "var(--border)" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Paperclip size={14} style={{ color: "var(--muted-foreground)" }} />
+                <span style={{ color: "var(--muted-foreground)", fontSize: "0.75rem", fontWeight: 500 }}>
+                  Вложения ({(attachments[selected.id] || []).length})
+                </span>
+              </div>
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                className="text-xs px-2 py-1 rounded-lg disabled:opacity-50" style={{ background: "var(--muted)", color: "var(--foreground)" }}>
+                {uploading ? "Загрузка..." : "+ Файл"}
+              </button>
+              <input ref={fileInputRef} type="file" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setUploading(true); try { const a = await attachmentsApi.upload(selected.id, file); addAttachmentToTask(selected.id, a); } finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; } }} />
+            </div>
+            <div className="space-y-1.5">
+              {(attachments[selected.id] || []).map((a: any) => (
+                <div key={a.id} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "var(--muted)" }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Paperclip size={12} style={{ color: "var(--muted-foreground)" }} />
+                    <span style={{ fontSize: "0.72rem", color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.filename}</span>
+                    <span style={{ fontSize: "0.65rem", color: "var(--muted-foreground)" }}>({(a.size / 1024).toFixed(1)} KB)</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a href={attachmentsApi.download(a.id)} target="_blank" rel="noopener noreferrer"
+                      className="p-1 rounded hover:opacity-80" style={{ color: "var(--muted-foreground)" }}>
+                      <Download size={12} />
+                    </a>
+                    <button onClick={async () => { await attachmentsApi.delete(a.id); removeAttachmentFromTask(selected.id, a.id); }}
+                      style={{ color: "var(--muted-foreground)" }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
-      {showCreateForm && (
-        <TaskForm projectId={project.id} onClose={() => setShowCreateForm(false)} onSaved={() => { setShowCreateForm(false); loadTasks(project.id); }} />
-      )}
-      {editingTask && (
-        <TaskForm task={editingTask} projectId={project.id} onClose={() => setEditingTask(null)} onSaved={() => { setEditingTask(null); loadTasks(project.id); }} />
+      {showForm && (
+        <TaskForm
+          task={editingTask}
+          projectId={project.id}
+          onClose={() => { setShowForm(false); setEditingTask(null); }}
+          onSaved={() => { setShowForm(false); setEditingTask(null); loadTasks(project.id); }}
+        />
       )}
     </div>
   );

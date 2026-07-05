@@ -32,4 +32,4 @@ RUN mkdir -p uploads
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=./src/prisma/schema.prisma && tsx src/prisma/seed.ts && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma db push --schema=./src/prisma/schema.prisma --skip-generate --accept-data-loss && tsx src/prisma/seed.ts && node dist/main.js"]

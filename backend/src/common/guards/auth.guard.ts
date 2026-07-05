@@ -1,53 +1,36 @@
-import { Request, Response, NextFunction } from "express";
+import { FastifyRequest, FastifyReply } from "fastify";
 import { verifyAccessToken } from "../../modules/auth/auth.service";
 import { AppError } from "../../common/exceptions/AppError";
-import { userContext } from "../middleware/audit.middleware";
+import { userContext } from "../../common/middleware/audit.middleware";
 
-declare global {
-  namespace Express {
-    interface Request {
-      userId?: string;
-      userRole?: string;
-    }
+export async function authenticate(request: FastifyRequest, _reply: FastifyReply) {
+  const authHeader = request.headers.authorization;
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : null;
+
+  if (!token) {
+    throw new AppError("Authentication required", 401);
   }
-}
 
-export function authenticate(req: Request, _res: Response, next: NextFunction) {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : null;
-
-    if (!token) {
-      throw new AppError("Authentication required", 401);
-    }
-
-    const payload = verifyAccessToken(token);
-    req.userId = payload.userId;
-    req.userRole = payload.role;
-    userContext.run({ userId: payload.userId }, () => next());
-  } catch (error) {
-    if (error instanceof AppError) {
-      next(error);
-    } else {
-      next(new AppError("Invalid or expired token", 401));
-    }
+    const payload = await verifyAccessToken(token);
+    request.userId = payload.userId;
+    request.userRole = payload.role;
+    userContext.enterWith({ userId: payload.userId });
+  } catch {
+    throw new AppError("Invalid or expired token", 401);
   }
 }
 
 export function authorize(...roles: string[]) {
-  return (req: Request, _res: Response, next: NextFunction) => {
-    if (!req.userRole) {
-      return next(new AppError("Authentication required", 401));
+  return async (request: FastifyRequest, _reply: FastifyReply) => {
+    if (!request.userRole) {
+      throw new AppError("Authentication required", 401);
     }
 
-    if (roles.length > 0 && !roles.includes(req.userRole)) {
-      return next(
-        new AppError("Insufficient permissions", 403)
-      );
+    if (roles.length > 0 && !roles.includes(request.userRole)) {
+      throw new AppError("Insufficient permissions", 403);
     }
-
-    next();
   };
 }
