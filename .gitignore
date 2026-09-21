@@ -1,12 +1,8 @@
-# ========================
 # Dependencies
-# ========================
 node_modules/
 .pnpm-store/
 
-# ========================
 # Build output
-# ========================
 dist/
 build/
 backend/dist/
@@ -14,76 +10,49 @@ Frontend/dist/
 graphify-out/
 Frontend/graphify-out/
 
-# ========================
 # Environment & secrets
-# ========================
 .env
 .env.*
 !.env.example
 backend/.env
 backend/.env.*
 
-# ========================
 # Logs
-# ========================
 *.log
 logs/
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 backend.log
 
-# ========================
 # Coverage & tests
-# ========================
 coverage/
 .nyc_output/
 backend/coverage/
 *.lcov
 test-report.pdf
 
-# ========================
-# Uploads & user content
-# ========================
+# Uploads
 uploads/
 backend/uploads/
 
-# ========================
-# SSL certificates (сгенерированные)
-# ========================
+# SSL
 ssl/
 
-# ========================
-# OS generated
-# ========================
+# OS
 .DS_Store
 Thumbs.db
-ehthumbs.db
 Desktop.ini
-$RECYCLE.BIN/
 
-# ========================
-# IDE / Editor
-# ========================
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.project
-.settings/
-.classpath
 
-# ========================
-# Misc
-# ========================
-*.tgz
-*.tar.gz
-.cache/
-.parcel-cache/
-~$*.docx
-~WRL*.tmp
-*.docx
-*.png
-Аккаунты.txt
+# Diploma / скрипты (не часть приложения)
+\u0412\u041a\u0420/
+scripts/
+MAIN PROMT.MD
+test_encoding.txt
+\u0410\u043a\u043a\u0430\u0443\u043d\u0442\u044b.txt
