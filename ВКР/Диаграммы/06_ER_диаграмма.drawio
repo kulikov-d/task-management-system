@@ -1,0 +1,53 @@
+<mxfile host="app.diagrams.net" agent="diplom" version="24.0.0">
+  <diagram id="er" name="ER-диаграмма">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="user" value="User\n—————————\nid: UUID\nemail: String\npassword: String\nrole: Role\nname: String\navatarUrl: String\ncreatedAt: DateTime" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#E3F2FD;strokeColor=#1E88E5;" vertex="1" parent="1">
+          <mxGeometry x="20" y="100" width="180" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="team" value="Team\n—————————\nid: UUID\nname: String\ndescription: String\ncreatedAt: DateTime" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="320" y="100" width="180" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="project" value="Project\n—————————\nid: UUID\nname: String\ndescription: String\nstatus: ProjectStatus\nleadId: UUID\ncreatedAt: DateTime" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="620" y="100" width="200" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="task" value="Task\n—————————\nid: UUID\ntitle: String\ndescription: String?\nstatus: TaskStatus\npriority: Priority\nreporterId: UUID\nassigneeId: UUID?\nprojectId: UUID\nposition: Float\ndeadline: DateTime?\ncreatedAt: DateTime" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#FCE4EC;strokeColor=#E53935;" vertex="1" parent="1">
+          <mxGeometry x="620" y="350" width="200" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="comment" value="Comment\n—————————\nid: UUID\ntext: String\nauthorId: UUID\ntaskId: UUID\ncreatedAt: DateTime" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#F3E5F5;strokeColor=#8E24AA;" vertex="1" parent="1">
+          <mxGeometry x="920" y="350" width="160" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="attachment" value="Attachment\n—————————\nid: UUID\nfilename: String\nmimeType: String\nsize: Int\ntaskId: UUID\nuploadedById: UUID" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#F3E5F5;strokeColor=#8E24AA;" vertex="1" parent="1">
+          <mxGeometry x="920" y="540" width="160" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="audit" value="AuditLog\n—————————\nid: UUID\nuserId: UUID\naction: String\nentityType: String\nentityId: String\nchanges: Json?\ncreatedAt: DateTime" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#F5F5F5;strokeColor=#9E9E9E;" vertex="1" parent="1">
+          <mxGeometry x="20" y="400" width="180" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="timeentry" value="TimeEntry\n—————————\nid: UUID\nstartTime: DateTime\nendTime: DateTime?\nduration: Int?\ntaskId: UUID\nuserId: UUID" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#E0F7FA;strokeColor=#00838F;" vertex="1" parent="1">
+          <mxGeometry x="320" y="400" width="180" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="teamMember" value="TeamMember\n—————————\nteamId: UUID\nuserId: UUID" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="320" y="600" width="150" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="projectMember" value="ProjectMember\n—————————\nprojectId: UUID\nuserId: UUID" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="620" y="680" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="notification" value="Notification\n—————————\nid: UUID\nuserId: UUID\ntype: String\nmessage: String\nread: Boolean\nrelatedId: String?" style="shape=mxgraph.entity2.table;startSize=30;container=1;collapsible=1;fontSize=11;fontFamily=Times New Roman;fillColor=#FFF8E1;strokeColor=#F9A825;" vertex="1" parent="1">
+          <mxGeometry x="20" y="640" width="170" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="user" target="team"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="team" target="project"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="project" target="task"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="task" target="comment"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="task" target="attachment"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="task" target="timeentry"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" value="N:M" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="team" target="teamMember"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" value="N:M" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="project" target="projectMember"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="user" target="audit"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e10" value="1:N" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=1;strokeColor=#333333;fontSize=10;fontFamily=Times New Roman;" edge="1" parent="1" source="user" target="notification"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

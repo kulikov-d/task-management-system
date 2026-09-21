@@ -38,7 +38,25 @@ const taskInclude = {
   author: { select: { id: true, name: true, email: true } },
   tags: { include: { tag: { select: { id: true, name: true, color: true, projectId: true } } } },
   _count: { select: { comments: true, attachments: true } },
+  timeEntries: { select: { duration: true } },
 };
+
+async function assertProjectMember(userId: string, projectId: string) {
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+  });
+  if (!member) throw new AppError("Insufficient permissions", 403);
+}
+
+function enrichTaskWithTime<T extends { timeEntries: { duration: number | null }[] }>(task: T): Omit<T, "timeEntries"> & { totalTimeSpent: number } {
+  const { timeEntries, ...rest } = task;
+  const totalTimeSpent = timeEntries.reduce((sum, e) => sum + (e.duration || 0), 0);
+  return { ...rest, totalTimeSpent } as any;
+}
+
+function enrichTasksWithTime<T extends { timeEntries: { duration: number | null }[] }>(tasks: T[]): (Omit<T, "timeEntries"> & { totalTimeSpent: number })[] {
+  return tasks.map(enrichTaskWithTime);
+}
 
 export async function listTasks(request: FastifyRequest, reply: FastifyReply) {
   const { projectId, status, priority, assigneeId, tagId, search, sprintId } = request.query as any;
@@ -62,7 +80,7 @@ export async function listTasks(request: FastifyRequest, reply: FastifyReply) {
     orderBy: [{ position: "asc" }, { createdAt: "desc" }],
   });
 
-  return reply.send(tasks);
+  return reply.send(enrichTasksWithTime(tasks));
 }
 
 export async function getTask(request: FastifyRequest, reply: FastifyReply) {
@@ -81,7 +99,7 @@ export async function getTask(request: FastifyRequest, reply: FastifyReply) {
     },
   });
   if (!task) throw new AppError("Task not found", 404);
-  return reply.send(task);
+  return reply.send(enrichTaskWithTime(task));
 }
 
 export async function createTask(request: FastifyRequest, reply: FastifyReply) {
@@ -124,7 +142,7 @@ export async function createTask(request: FastifyRequest, reply: FastifyReply) {
 
   emitToProject(task.projectId, "task:created", task);
 
-  return reply.code(201).send(task);
+  return reply.code(201).send(enrichTaskWithTime(task));
 }
 
 export async function updateTask(request: FastifyRequest, reply: FastifyReply) {
@@ -133,6 +151,8 @@ export async function updateTask(request: FastifyRequest, reply: FastifyReply) {
 
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(request.userId!, existing.projectId);
 
   const task = await prisma.task.update({
     where: { id },
@@ -158,7 +178,7 @@ export async function updateTask(request: FastifyRequest, reply: FastifyReply) {
 
   emitToProject(task.projectId, "task:updated", task);
 
-  return reply.send(task);
+  return reply.send(enrichTaskWithTime(task));
 }
 
 export async function deleteTask(request: FastifyRequest, reply: FastifyReply) {
@@ -187,11 +207,17 @@ export async function assignTask(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
   const { assigneeId } = request.body as { assigneeId: string };
 
+  const existing = await prisma.task.findUnique({ where: { id } });
+  if (!existing) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(request.userId!, existing.projectId);
+
   const task = await prisma.task.update({
     where: { id },
     data: { assigneeId },
     include: {
       assignee: { select: { id: true, name: true, email: true, avatar: true } },
+      timeEntries: { select: { duration: true } },
     },
   });
 
@@ -218,7 +244,7 @@ export async function assignTask(request: FastifyRequest, reply: FastifyReply) {
     });
   }
 
-  return reply.send(task);
+  return reply.send(enrichTaskWithTime(task));
 }
 
 export async function changeStatus(request: FastifyRequest, reply: FastifyReply) {
@@ -227,6 +253,8 @@ export async function changeStatus(request: FastifyRequest, reply: FastifyReply)
 
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(request.userId!, existing.projectId);
 
   const task = await prisma.task.update({
     where: { id },
@@ -261,7 +289,7 @@ export async function changeStatus(request: FastifyRequest, reply: FastifyReply)
     });
   }
 
-  return reply.send(task);
+  return reply.send(enrichTaskWithTime(task));
 }
 
 export async function moveTaskHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -270,6 +298,8 @@ export async function moveTaskHandler(request: FastifyRequest, reply: FastifyRep
 
   const existing = await prisma.task.findUnique({ where: { id } });
   if (!existing) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(request.userId!, existing.projectId);
 
   const task = await prisma.task.update({
     where: { id },
@@ -294,7 +324,7 @@ export async function moveTaskHandler(request: FastifyRequest, reply: FastifyRep
     toColumn: status,
   });
 
-  return reply.send(task);
+  return reply.send(enrichTaskWithTime(task));
 }
 
 export { moveTaskHandler as moveTask };
@@ -306,6 +336,8 @@ export async function addTagToTask(request: FastifyRequest, reply: FastifyReply)
   const task = await prisma.task.findUnique({ where: { id } });
   if (!task) throw new AppError("Task not found", 404);
 
+  await assertProjectMember(request.userId!, task.projectId);
+
   await prisma.taskTag.create({
     data: { taskId: id, tagId },
   });
@@ -314,9 +346,10 @@ export async function addTagToTask(request: FastifyRequest, reply: FastifyReply)
     where: { id },
     include: taskInclude,
   });
+  if (!updatedTask) throw new AppError("Task not found", 404);
 
   emitToProject(task.projectId, "task:updated", updatedTask);
-  return reply.send(updatedTask);
+  return reply.send(enrichTaskWithTime(updatedTask));
 }
 
 export async function removeTagFromTask(request: FastifyRequest, reply: FastifyReply) {
@@ -324,6 +357,8 @@ export async function removeTagFromTask(request: FastifyRequest, reply: FastifyR
 
   const task = await prisma.task.findUnique({ where: { id } });
   if (!task) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(request.userId!, task.projectId);
 
   await prisma.taskTag.deleteMany({
     where: { taskId: id, tagId },
@@ -333,7 +368,8 @@ export async function removeTagFromTask(request: FastifyRequest, reply: FastifyR
     where: { id },
     include: taskInclude,
   });
+  if (!updatedTask) throw new AppError("Task not found", 404);
 
   emitToProject(task.projectId, "task:updated", updatedTask);
-  return reply.send(updatedTask);
+  return reply.send(enrichTaskWithTime(updatedTask));
 }

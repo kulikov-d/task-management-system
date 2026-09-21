@@ -1,12 +1,14 @@
 import { create } from "zustand";
-import { projectsApi, tasksApi, tagsApi, usersApi, notificationsApi, auditApi, analyticsApi, sprintsApi, commentsApi, attachmentsApi } from "../api/client";
-import type { Project, Task, Tag, User, Notification, AuditLog, Sprint, Comment, Attachment } from "../types/api";
+import { projectsApi, tasksApi, tagsApi, usersApi, notificationsApi, auditApi, analyticsApi, sprintsApi, commentsApi, attachmentsApi, teamsApi, timeTrackingApi } from "../api/client";
+import type { Team } from "../api/client";
+import type { Project, Task, Tag, User, Notification, AuditLog, Sprint, Comment, Attachment, TimeEntry } from "../types/api";
 
 interface AppState {
   projects: Project[];
   currentProject: Project | null;
   tasks: Task[];
   tags: Tag[];
+  teams: Team[];
   users: User[];
   notifications: Notification[];
   unreadCount: number;
@@ -19,6 +21,14 @@ interface AppState {
   velocityData: any[];
   taskStats: any;
   isLoading: boolean;
+  sidebarCollapsed: boolean;
+  recentTaskIds: string[];
+  favoriteProjectIds: string[];
+
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  addRecentTask: (taskId: string) => void;
+  toggleFavoriteProject: (projectId: string) => void;
 
   loadProjects: () => Promise<void>;
   setCurrentProject: (project: Project) => void;
@@ -60,6 +70,21 @@ interface AppState {
   updateSprintInState: (sprint: Sprint) => void;
   removeSprint: (sprintId: string) => void;
   refreshProject: (projectId: string) => Promise<void>;
+
+  loadTeams: () => Promise<void>;
+  addTeam: (team: Team) => void;
+  updateTeamInState: (team: Team) => void;
+  removeTeam: (teamId: string) => void;
+  updateTeamMemberInState: (teamId: string, member: any) => void;
+  removeTeamMemberInState: (teamId: string, memberId: string) => void;
+  updateTeamProjectInState: (teamId: string, project: any) => void;
+  removeTeamProjectInState: (teamId: string, projectId: string) => void;
+
+  activeTimer: TimeEntry | null;
+  loadActiveTimer: () => Promise<void>;
+  startTimer: (taskId: string, description?: string) => Promise<TimeEntry>;
+  stopTimer: () => Promise<void>;
+  loadTimeEntries: (taskId: string) => Promise<TimeEntry[]>;
 }
 
 export const useAppStore = create<AppState>()((set, get) => ({
@@ -67,6 +92,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   currentProject: null,
   tasks: [],
   tags: [],
+  teams: [],
   users: [],
   notifications: [],
   unreadCount: 0,
@@ -79,6 +105,22 @@ export const useAppStore = create<AppState>()((set, get) => ({
   velocityData: [],
   taskStats: null,
   isLoading: false,
+  sidebarCollapsed: false,
+  recentTaskIds: [],
+  favoriteProjectIds: [],
+
+  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+  setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+  addRecentTask: (taskId) =>
+    set((state) => ({
+      recentTaskIds: [taskId, ...state.recentTaskIds.filter((id) => id !== taskId)].slice(0, 10),
+    })),
+  toggleFavoriteProject: (projectId) =>
+    set((state) => ({
+      favoriteProjectIds: state.favoriteProjectIds.includes(projectId)
+        ? state.favoriteProjectIds.filter((id) => id !== projectId)
+        : [...state.favoriteProjectIds, projectId],
+    })),
 
   loadProjects: async () => {
     try {
@@ -359,5 +401,93 @@ export const useAppStore = create<AppState>()((set, get) => ({
     } catch (err) {
       console.error("Failed to refresh project:", err);
     }
+  },
+
+  loadTeams: async () => {
+    try {
+      const teams = await teamsApi.list();
+      set({ teams });
+    } catch (err) {
+      console.error("Failed to load teams:", err);
+    }
+  },
+
+  addTeam: (team) =>
+    set((state) => ({
+      teams: [...state.teams, team],
+    })),
+
+  updateTeamInState: (team) =>
+    set((state) => ({
+      teams: state.teams.map((t) => (t.id === team.id ? { ...t, ...team } : t)),
+    })),
+
+  removeTeam: (teamId) =>
+    set((state) => ({
+      teams: state.teams.filter((t) => t.id !== teamId),
+    })),
+
+  updateTeamMemberInState: (teamId, member) =>
+    set((state) => ({
+      teams: state.teams.map((t) =>
+        t.id === teamId
+          ? { ...t, members: [...t.members.filter((m) => m.id !== member.id), member], _count: { ...t._count, members: t.members.some((m) => m.id === member.id) ? t._count.members : t._count.members + 1 } }
+          : t
+      ),
+    })),
+
+  removeTeamMemberInState: (teamId, memberId) =>
+    set((state) => ({
+      teams: state.teams.map((t) =>
+        t.id === teamId
+          ? { ...t, members: t.members.filter((m) => m.id !== memberId), _count: { ...t._count, members: Math.max(0, t._count.members - 1) } }
+          : t
+      ),
+    })),
+
+  updateTeamProjectInState: (teamId, project) =>
+    set((state) => ({
+      teams: state.teams.map((t) =>
+        t.id === teamId
+          ? { ...t, projects: [...t.projects.filter((p) => p.projectId !== project.id), { id: `tp-${project.id}`, projectId: project.id, teamId, createdAt: new Date().toISOString(), project }], _count: { ...t._count, projects: t.projects.some((p) => p.projectId === project.id) ? t._count.projects : t._count.projects + 1 } }
+          : t
+      ),
+    })),
+
+  removeTeamProjectInState: (teamId, projectId) =>
+    set((state) => ({
+      teams: state.teams.map((t) =>
+        t.id === teamId
+          ? { ...t, projects: t.projects.filter((p) => p.projectId !== projectId), _count: { ...t._count, projects: Math.max(0, t._count.projects - 1) } }
+          : t
+      ),
+    })),
+
+  activeTimer: null,
+
+  loadActiveTimer: async () => {
+    try {
+      const entry = await timeTrackingApi.active();
+      set({ activeTimer: entry });
+    } catch (err) {
+      console.error("Failed to load active timer:", err);
+    }
+  },
+
+  startTimer: async (taskId, description) => {
+    const entry = await timeTrackingApi.start(taskId, description);
+    set({ activeTimer: entry });
+    return entry;
+  },
+
+  stopTimer: async () => {
+    const { activeTimer } = get();
+    if (!activeTimer) return;
+    await timeTrackingApi.stop(activeTimer.id);
+    set({ activeTimer: null });
+  },
+
+  loadTimeEntries: async (taskId) => {
+    return timeTrackingApi.listByTask(taskId);
   },
 }));

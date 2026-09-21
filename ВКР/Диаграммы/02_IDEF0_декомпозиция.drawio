@@ -1,0 +1,70 @@
+<mxfile host="app.diagrams.net" agent="diplom" version="24.0.0">
+  <diagram id="idef0-decomp" name="IDEF0 A0">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="a1" value="A1\nУправление\nпользователями" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7C3AED;fontSize=11;fontFamily=Times New Roman;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="130" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" value="A2\nУправление\nпроектами" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7C3AED;fontSize=11;fontFamily=Times New Roman;align=center;" vertex="1" parent="1">
+          <mxGeometry x="220" y="200" width="130" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" value="A3\nУправление\nзадачами" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7C3AED;fontSize=11;fontFamily=Times New Roman;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="200" width="130" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a4" value="A4\nВизуализация\n(Kanban)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7C3AED;fontSize=11;fontFamily=Times New Roman;align=center;" vertex="1" parent="1">
+          <mxGeometry x="580" y="200" width="130" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a5" value="A5\nУчёт\nтрудозатрат" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7C3AED;fontSize=11;fontFamily=Times New Roman;align=center;" vertex="1" parent="1">
+          <mxGeometry x="760" y="200" width="130" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a6" value="A6\nАналитика и\nаудит" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7C3AED;fontSize=11;fontFamily=Times New Roman;align=center;" vertex="1" parent="1">
+          <mxGeometry x="940" y="200" width="130" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="in1" value="Регистрация,\nпрофиль" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="20" y="340" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="in2" value="Название,\nописание" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="200" y="340" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="in3" value="Описание,\nприоритет" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="380" y="340" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="in4" value="Перетаскивание" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="570" y="340" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="in5" value="Старт/стоп\nтаймера" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="750" y="340" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="in6" value="Запросы\nотчётов" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="930" y="340" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="out1" value="Пользователи\nи роли" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="20" y="80" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="out2" value="Проекты" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="200" y="80" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="out3" value="Задачи" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="380" y="80" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="out4" value="Доска\n(Kanban)" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="570" y="80" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="out5" value="Записи\nвремени" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="750" y="80" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="out6" value="Отчёты" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="930" y="80" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ctrl" value="RBAC, бизнес-правила, статусы" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#E3F2FD;strokeColor=#1E88E5;" vertex="1" parent="1">
+          <mxGeometry x="350" y="30" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="mech" value="React, Fastify, PostgreSQL, WebSocket" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;fillColor=#F3E5F5;strokeColor=#8E24AA;" vertex="1" parent="1">
+          <mxGeometry x="350" y="420" width="250" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,76 +1,90 @@
 import { useEffect } from "react";
 import { FileEdit, Plus, UserCheck, MessageSquare, CheckCircle2 } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
-import { getInitials, getUserColor, formatDateTime } from "../utils/helpers";
+import { formatDateTime } from "../utils/helpers";
+import { Card } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Avatar } from "./ui/avatar";
 
-const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-  create: { label: "Создание", icon: Plus, color: "#10b981" },
-  CREATED: { label: "Создание", icon: Plus, color: "#10b981" },
-  update: { label: "Обновление", icon: FileEdit, color: "#6366f1" },
-  UPDATED: { label: "Обновление", icon: FileEdit, color: "#6366f1" },
-  assign: { label: "Назначение", icon: UserCheck, color: "#22d3ee" },
-  ASSIGNED: { label: "Назначение", icon: UserCheck, color: "#22d3ee" },
-  comment: { label: "Комментарий", icon: MessageSquare, color: "#f59e0b" },
-  COMMENTED: { label: "Комментарий", icon: MessageSquare, color: "#f59e0b" },
-  status: { label: "Статус", icon: CheckCircle2, color: "#8b5cf6" },
-  STATUS_CHANGED: { label: "Статус", icon: CheckCircle2, color: "#8b5cf6" },
-  MOVED: { label: "Перемещение", icon: FileEdit, color: "#06b6d4" },
-  OVERDUE: { label: "Просрочка", icon: MessageSquare, color: "#ef4444" },
+const ACTION_CONFIG: Record<string, { label: string; icon: any; variant: "success" | "info" | "warning" | "error" | "secondary" }> = {
+  create: { label: "Создание", icon: Plus, variant: "success" },
+  CREATED: { label: "Создание", icon: Plus, variant: "success" },
+  update: { label: "Обновление", icon: FileEdit, variant: "info" },
+  UPDATED: { label: "Обновление", icon: FileEdit, variant: "info" },
+  assign: { label: "Назначение", icon: UserCheck, variant: "info" },
+  ASSIGNED: { label: "Назначение", icon: UserCheck, variant: "info" },
+  comment: { label: "Комментарий", icon: MessageSquare, variant: "warning" },
+  COMMENTED: { label: "Комментарий", icon: MessageSquare, variant: "warning" },
+  status: { label: "Статус", icon: CheckCircle2, variant: "secondary" },
+  STATUS_CHANGED: { label: "Статус", icon: CheckCircle2, variant: "secondary" },
+  MOVED: { label: "Перемещение", icon: FileEdit, variant: "info" },
+  OVERDUE: { label: "Просрочка", icon: MessageSquare, variant: "error" },
 };
 
-export function AuditLog({ project }: { project: any }) {
+function formatDiff(diff: any): string {
+  if (!diff) return "";
+  if (typeof diff === "string") return diff;
+  const entries = Object.entries(diff);
+  if (entries.length === 0) return "";
+  return entries.map(([k, v]) => {
+    if (typeof v === "object" && v !== null && "from" in v && "to" in v) {
+      return `${k}: ${v.from} → ${v.to}`;
+    }
+    return `${k}: ${String(v)}`;
+  }).join(", ");
+}
+
+export function AuditLog({ project }: { project?: any }) {
   const auditLogs = useAppStore((s) => s.auditLogs);
   const users = useAppStore((s) => s.users);
   const loadAuditLogs = useAppStore((s) => s.loadAuditLogs);
 
   useEffect(() => {
-    loadAuditLogs();
-  }, [loadAuditLogs]);
+    if (project?.id) {
+      loadAuditLogs({ projectId: project.id });
+    } else {
+      loadAuditLogs();
+    }
+  }, [loadAuditLogs, project?.id]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-5" style={{ background: "var(--background)" }}>
+    <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-background">
       <div>
-        <h2 style={{ color: "var(--foreground)" }}>Журнал аудита</h2>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "0.8rem", marginTop: "0.125rem" }}>Все действия в системе</p>
+        <h2 className="text-lg font-semibold text-foreground">Журнал аудита</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">Все действия в системе</p>
       </div>
 
-      <div className="rounded-xl overflow-hidden" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-        <div className="grid px-5 py-2.5 border-b" style={{ gridTemplateColumns: "100px 90px 1fr 130px 110px", borderColor: "var(--border)", background: "var(--muted)" }}>
+      <Card>
+        <div className="grid px-4 py-2 border-b border-border bg-card"
+          style={{ gridTemplateColumns: "100px 80px 1fr 120px 100px" }}>
           {["Действие", "Сущность", "Описание", "Пользователь", "Время"].map(h => (
-            <span key={h} style={{ color: "var(--muted-foreground)", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</span>
+            <span key={h} className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</span>
           ))}
         </div>
         {auditLogs.length === 0 && (
-          <div className="p-8 text-center" style={{ color: "var(--muted-foreground)", fontSize: "0.8rem" }}>Журнал пуст</div>
+          <div className="p-8 text-center text-xs text-muted-foreground">Журнал пуст</div>
         )}
         {auditLogs.map((ev: any, i: number) => {
           const cfg = ACTION_CONFIG[ev.action] ?? ACTION_CONFIG.update;
           const Icon = cfg.icon;
           const user = ev.user || users.find((u: any) => u.id === ev.userId);
           return (
-            <div key={ev.id} className="grid px-5 py-3 hover:bg-black/[0.02] transition-colors items-center"
-              style={{ gridTemplateColumns: "100px 90px 1fr 130px 110px", borderBottom: i < auditLogs.length - 1 ? "1px solid var(--border)" : "none" }}>
+            <div key={ev.id} className="grid px-4 py-2 hover:bg-accent/50 transition-colors items-center"
+              style={{ gridTemplateColumns: "100px 80px 1fr 120px 100px", borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
               <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: cfg.color + "18" }}>
-                  <Icon size={11} style={{ color: cfg.color }} />
-                </div>
-                <span style={{ color: cfg.color, fontSize: "0.72rem", fontWeight: 500 }}>{cfg.label}</span>
+                <Badge variant={cfg.variant} className="p-1"><Icon size={10} /></Badge>
+                <span className="text-[11px] font-medium text-foreground">{cfg.label}</span>
               </div>
-              <span className="px-2 py-0.5 rounded w-fit text-xs" style={{ background: "var(--muted)", color: "var(--muted-foreground)", fontSize: "0.68rem" }}>{ev.entity}</span>
-              <span style={{ color: "var(--foreground)", fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{JSON.stringify(ev.diff) || ev.entity}</span>
-              <div className="flex items-center gap-2">
-                {user && (
-                  <>
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-white" style={{ background: getUserColor(user.id), fontSize: "0.5rem", fontWeight: 600 }}>{getInitials(user.name)}</div>
-                    <span style={{ color: "var(--foreground)", fontSize: "0.72rem" }}>{user.name?.split(" ")[0]}</span>
-                  </>
-                )}
+              <Badge variant="secondary">{ev.entity}</Badge>
+              <span className="text-xs text-foreground truncate">{formatDiff(ev.diff) || ev.entity}</span>
+              <div className="flex items-center gap-1.5">
+                {user && <><Avatar name={user.name} size="sm" /><span className="text-[11px] text-foreground truncate">{user.name?.split(" ")[0]}</span></>}
               </div>
-              <span style={{ color: "var(--muted-foreground)", fontSize: "0.72rem" }}>{formatDateTime(ev.createdAt)}</span>
+              <span className="text-[11px] text-muted-foreground">{formatDateTime(ev.createdAt)}</span>
             </div>
           );
         })}
-      </div>
+      </Card>
     </div>
   );
 }

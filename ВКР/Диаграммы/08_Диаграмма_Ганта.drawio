@@ -1,0 +1,73 @@
+<mxfile host="app.diagrams.net" agent="diplom" version="24.0.0">
+  <diagram id="gantt" name="Диаграмма Ганта">
+    <mxGraphModel dx="1100" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="hdr" value="Этап" style="text;html=1;align=left;fontSize=11;fontStyle=1;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="30" width="200" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="Окт" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="280" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="Ноя" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="350" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="Дек" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="420" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="Янв" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="490" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" value="Фев" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="560" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" value="Мар" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="630" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" value="Апр" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="700" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" value="Май" style="text;html=1;align=center;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="770" y="30" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="t1" value="Анализ и проектирование" style="text;html=1;align=left;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="80" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="b1" value="" style="rounded=1;fillColor=#1E88E5;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="280" y="82" width="210" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="t2" value="Разработка бэкенда" style="text;html=1;align=left;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="130" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" value="" style="rounded=1;fillColor=#43A047;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="490" y="132" width="280" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="t3" value="Разработка фронтенда" style="text;html=1;align=left;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="180" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" value="" style="rounded=1;fillColor=#FB8C00;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="490" y="182" width="280" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="t4" value="Тестирование" style="text;html=1;align=left;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="230" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="b4" value="" style="rounded=1;fillColor=#E53935;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="700" y="232" width="140" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="t5" value="Деплой и внедрение" style="text;html=1;align=left;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="280" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="b5" value="" style="rounded=1;fillColor=#8E24AA;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="770" y="282" width="70" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="t6" value="Подготовка документации" style="text;html=1;align=left;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="20" y="330" width="240" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="b6" value="" style="rounded=1;fillColor=#795548;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="560" y="332" width="280" height="24" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

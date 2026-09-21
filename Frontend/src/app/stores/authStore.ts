@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { authApi, setAccessToken } from "../api/client";
+import { authApi, setAccessToken, getAccessToken } from "../api/client";
 import type { User } from "../types/api";
 
 function isTokenExpired(token: string): boolean {
@@ -35,7 +35,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       const data = await authApi.login(email, password);
       setAccessToken(data.accessToken);
       set({ user: data.user, isAuthenticated: true, isLoading: false });
-      localStorage.setItem("accessToken", data.accessToken);
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
       throw err;
@@ -48,7 +47,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       const data = await authApi.register(email, password, name);
       setAccessToken(data.accessToken);
       set({ user: data.user, isAuthenticated: true, isLoading: false });
-      localStorage.setItem("accessToken", data.accessToken);
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
       throw err;
@@ -58,59 +56,36 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: () => {
     authApi.logout().catch(() => {});
     setAccessToken(null);
-    localStorage.removeItem("accessToken");
     set({ user: null, isAuthenticated: false });
   },
 
   loadUser: async () => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      set({ isLoading: false });
-      return;
-    }
-    if (isTokenExpired(token)) {
+    const token = getAccessToken();
+
+    if (token && !isTokenExpired(token)) {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000/api"}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAccessToken(data.accessToken);
-          localStorage.setItem("accessToken", data.accessToken);
-          const user = await authApi.me();
-          set({ user, isAuthenticated: true, isLoading: false });
-          return;
-        }
+        const user = await authApi.me();
+        set({ user, isAuthenticated: true, isLoading: false });
+        return;
       } catch {}
-      localStorage.removeItem("accessToken");
-      setAccessToken(null);
-      set({ isLoading: false });
-      return;
     }
+
     try {
-      setAccessToken(token);
-      const user = await authApi.me();
-      set({ user, isAuthenticated: true, isLoading: false });
-    } catch {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000/api"}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAccessToken(data.accessToken);
-          localStorage.setItem("accessToken", data.accessToken);
-          const user = await authApi.me();
-          set({ user, isAuthenticated: true, isLoading: false });
-          return;
-        }
-      } catch {}
-      localStorage.removeItem("accessToken");
-      setAccessToken(null);
-      set({ isLoading: false });
-    }
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000/api"}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAccessToken(data.accessToken);
+        const user = await authApi.me();
+        set({ user, isAuthenticated: true, isLoading: false });
+        return;
+      }
+    } catch {}
+
+    setAccessToken(null);
+    set({ isLoading: false });
   },
 
   clearError: () => set({ error: null }),

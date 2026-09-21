@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { Zap } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Card } from "./ui/card";
+import { Alert } from "./ui/alert";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -27,75 +32,51 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md p-8 rounded-xl border border-gray-200 bg-white shadow-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">ADD System</h1>
-          <p className="text-sm mt-1 text-gray-500">Task Management System</p>
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Card className="w-full max-w-sm p-8">
+        <div className="text-center mb-6">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-3 bg-foreground">
+            <Zap size={20} className="text-background" strokeWidth={2.5} />
+          </div>
+          <h1 className="text-xl font-bold text-foreground">ADD System</h1>
+          <p className="text-xs text-muted-foreground mt-1">Система управления задачами</p>
         </div>
 
         {isRegister && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "0.5rem", border: "1px solid #d1d5db", fontSize: "0.875rem", color: "#1a1d27", backgroundColor: "#ffffff", outline: "none" }}
-              placeholder="Enter your name"
-            />
+          <div className="mb-3">
+            <label className="block text-xs font-medium text-foreground mb-1">Имя</label>
+            <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" />
           </div>
         )}
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "0.5rem", border: "1px solid #d1d5db", fontSize: "0.875rem", color: "#1a1d27", backgroundColor: "#ffffff", outline: "none" }}
-              placeholder="a.smirnov@add.dev"
-            />
+        <div className="mb-3">
+          <label className="block text-xs font-medium text-foreground mb-1">Email</label>
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="a.smirnov@add.dev" />
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "0.5rem", border: "1px solid #d1d5db", fontSize: "0.875rem", color: "#1a1d27", backgroundColor: "#ffffff", outline: "none" }}
-              placeholder="password123"
-            />
+          <label className="block text-xs font-medium text-foreground mb-1">Пароль</label>
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="password123" />
         </div>
 
-        {error && (
-          <div className="text-sm text-red-500 bg-red-50 p-2 rounded mb-4">{error}</div>
-        )}
+        {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
-        <button
-          onClick={isRegister ? handleRegister : handleLogin}
-          className="w-full py-2 px-4 rounded-lg font-medium text-white text-sm bg-indigo-500 hover:bg-indigo-600"
-        >
-          {isRegister ? "Register" : "Login"}
+        <Button onClick={isRegister ? handleRegister : handleLogin} className="w-full mb-3">
+          {isRegister ? "Зарегистрироваться" : "Войти"}
+        </Button>
+
+        <button onClick={() => { setIsRegister(!isRegister); clearError(); }}
+          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors">
+          {isRegister ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
         </button>
 
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => { setIsRegister(!isRegister); clearError(); }}
-            className="text-sm text-indigo-500 hover:underline"
-          >
-            {isRegister ? "Already have an account? Login" : "Don't have an account? Register"}
-          </button>
+        <div className="mt-5 p-3 rounded-lg bg-secondary text-xs text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">Демо-аккаунты:</p>
+          <p>a.smirnov@add.dev / password123 (администратор)</p>
+          <p>m.petrova@add.dev / password123 (тимлид)</p>
+          <p>d.kozlov@add.dev / password123 (разработчик)</p>
         </div>
-
-        <div className="mt-6 p-3 rounded text-xs bg-gray-100 text-gray-600">
-          <p className="font-medium mb-1">Demo accounts:</p>
-          <p>a.smirnov@add.dev / password123 (admin)</p>
-          <p>m.petrova@add.dev / password123 (lead)</p>
-          <p>d.kozlov@add.dev / password123 (developer)</p>
-        </div>
-      </div>
+      </Card>
     </div>
   );
 }

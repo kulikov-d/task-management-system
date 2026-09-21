@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, Kanban, BarChart2, ClipboardList, Bell, Users, Zap, FolderOpen, LogOut, FolderPlus, Timer, Search } from "lucide-react";
+import { LayoutDashboard, BarChart2, ClipboardList, Bell, Users, Zap, LogOut, Search, FolderKanban, Settings, Star, ChevronLeft, ChevronRight, ListChecks, Shield, HelpCircle } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
-import { getProjectColor, getInitials } from "../utils/helpers";
+import { useAppStore } from "../stores/appStore";
+import { getProjectColor } from "../utils/helpers";
 import { searchApi } from "../api/client";
+import { Avatar } from "./ui/avatar";
+import { TaskDetailPanel } from "./kanban/TaskDetailPanel";
 
 interface SidebarProps {
   activeProject: any;
@@ -14,21 +17,28 @@ interface SidebarProps {
 
 const NAV = [
   { path: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
-  { path: "/kanban", label: "Kanban-доска", icon: Kanban },
-  { path: "/tasks", label: "Список задач", icon: ClipboardList },
-  { path: "/sprints", label: "Спринты", icon: Timer },
+  { path: "/my-tasks", label: "Мои задачи", icon: ListChecks },
+  { path: "/tasks", label: "Задачи", icon: ClipboardList },
   { path: "/analytics", label: "Аналитика", icon: BarChart2 },
-  { path: "/audit", label: "Аудит", icon: FolderOpen },
   { path: "/team", label: "Команда", icon: Users },
+  { path: "/audit", label: "Аудит", icon: Shield, adminOnly: true },
+  { path: "/help", label: "Помощь", icon: HelpCircle },
 ];
 
 export function Sidebar({ activeProject, projects, onProjectChange, notifCount }: SidebarProps) {
   const { user: me, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const collapsed = useAppStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const recentTaskIds = useAppStore((s) => s.recentTaskIds);
+  const tasks = useAppStore((s) => s.tasks);
+  const favoriteProjectIds = useAppStore((s) => s.favoriteProjectIds);
+  const toggleFavoriteProject = useAppStore((s) => s.toggleFavoriteProject);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ tasks: any[]; projects: any[]; users: any[] }>({ tasks: [], projects: [], users: [] });
   const [showSearch, setShowSearch] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,91 +57,156 @@ export function Sidebar({ activeProject, projects, onProjectChange, notifCount }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const recentTasks = recentTaskIds
+    .map((id) => tasks.find((t: any) => t.id === id))
+    .filter(Boolean)
+    .slice(0, 5);
+
+  const favoriteProjects = projects.filter((p: any) => favoriteProjectIds.includes(p.id));
+
+  const w = collapsed ? "w-14" : "w-56";
+
   return (
-    <aside className="flex flex-col w-60 shrink-0 h-full" style={{ background: "var(--sidebar)", borderRight: "1px solid var(--sidebar-border)" }}>
-      <div className="flex items-center gap-2.5 px-5 py-4 border-b" style={{ borderColor: "var(--sidebar-border)" }}>
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "var(--sidebar-primary)" }}>
-          <Zap size={14} color="#fff" strokeWidth={2.5} />
+    <>
+    <aside className={`flex flex-col ${w} shrink-0 h-full text-white transition-all duration-300`} style={{ background: "var(--gradient-sidebar)" }}>
+      <div className={`flex items-center ${collapsed ? "justify-center px-0 py-4" : "gap-2.5 px-4 py-4"}`}>
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-white/20 backdrop-blur-sm shrink-0">
+          <Zap size={16} className="text-white" strokeWidth={2.5} />
         </div>
-        <span style={{ color: "#e2e4f8", fontWeight: 600, fontSize: "0.95rem" }}>ADD System</span>
+        {!collapsed && <span className="text-sm font-bold text-white tracking-tight">ADD System</span>}
       </div>
 
-      {/* Project switcher */}
-      <div className="px-3 pt-4 pb-2">
-        <p style={{ color: "var(--muted-foreground)", fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", paddingLeft: "0.5rem", marginBottom: "0.375rem" }}>Проект</p>
-        {activeProject && (
-          <button onClick={() => navigate(`/projects/${activeProject.id}`)}
-            className="w-full rounded-lg px-3 py-2 flex items-center gap-2 hover:opacity-80 transition-opacity text-left">
-            <div className="w-5 h-5 rounded flex items-center justify-center shrink-0" style={{ background: getProjectColor(activeProject.key), fontSize: "0.55rem", fontWeight: 700, color: "#fff" }}>
+      {!collapsed && activeProject && (
+        <div className="mx-2 mb-2 flex items-center gap-1.5">
+          <button onClick={() => navigate("/dashboard")}
+            className="flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/15 hover:bg-white/20 transition-all duration-200">
+            <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+              style={{ background: getProjectColor(activeProject.key) }}>
               {activeProject.key?.slice(0, 1)}
             </div>
-            <span style={{ color: "var(--sidebar-accent-foreground)", fontSize: "0.8rem", fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {activeProject.name}
-            </span>
+            <span className="text-xs font-semibold text-white truncate">{activeProject.name}</span>
+          </button>
+          <button onClick={() => navigate(`/projects/${activeProject.id}`)}
+            className="p-2 rounded-xl text-white/50 hover:bg-white/15 hover:text-white transition-all duration-200"
+            title="Настройки проекта">
+            <Settings size={14} />
+          </button>
+        </div>
+      )}
+
+      {!collapsed && !activeProject && (
+        <button onClick={() => navigate("/projects")}
+          className="mx-2 mb-2 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-white/20 hover:bg-white/10 transition-all duration-200">
+          <FolderKanban size={14} className="text-white/50" />
+          <span className="text-xs text-white/60">Выберите проект</span>
+        </button>
+      )}
+
+      {collapsed && activeProject && (
+        <button onClick={() => navigate("/dashboard")} className="mx-auto mb-2 p-2 rounded-xl bg-white/15 hover:bg-white/20 transition-all" title={activeProject.name}>
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[9px] font-bold"
+            style={{ background: getProjectColor(activeProject.key) }}>
+            {activeProject.key?.slice(0, 1)}
+          </div>
+        </button>
+      )}
+
+      <nav className={`flex-1 ${collapsed ? "px-1.5" : "px-2"} pt-1 space-y-0.5 overflow-y-auto`}>
+        {NAV.filter((item) => !item.adminOnly || me?.role === "admin" || me?.role === "lead").map(({ path, label, icon: Icon }) => {
+          const active = location.pathname === path;
+          return (
+            <button key={path} onClick={() => navigate(path)}
+              title={collapsed ? label : undefined}
+              className={`w-full flex items-center gap-2.5 rounded-xl ${collapsed ? "justify-center px-2" : "px-2.5"} py-2 transition-all duration-200 ${
+                active ? "bg-white/20 font-medium text-white shadow-lg shadow-purple-500/10" : "text-white/60 hover:bg-white/10 hover:text-white"
+              }`}>
+              <Icon size={16} strokeWidth={active ? 2 : 1.5} />
+              {!collapsed && <span className="text-xs">{label}</span>}
+            </button>
+          );
+        })}
+
+        {!collapsed && favoriteProjects.length > 0 && (
+          <div className="pt-2">
+            <p className="text-[10px] font-semibold uppercase text-white/30 px-2.5 mb-1">Избранные</p>
+            {favoriteProjects.map((p: any) => (
+              <button key={p.id} onClick={() => { onProjectChange(p); navigate("/dashboard"); }}
+                className="w-full flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-all duration-200 text-white/60 hover:bg-white/10 hover:text-white">
+                <div className="w-4 h-4 rounded flex items-center justify-center text-white shrink-0"
+                  style={{ background: getProjectColor(p.key), fontSize: "7px", fontWeight: 700 }}>
+                  {p.key?.slice(0, 1)}
+                </div>
+                <span className="text-[11px] truncate">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!collapsed && recentTasks.length > 0 && (
+          <div className="pt-2">
+            <p className="text-[10px] font-semibold uppercase text-white/30 px-2.5 mb-1">Недавние</p>
+            {recentTasks.map((t: any) => (
+              <button key={t.id} onClick={() => { setSelectedTask(t); }}
+                className="w-full text-left flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-all duration-200 text-white/60 hover:bg-white/10 hover:text-white">
+                <span className="text-[11px] truncate">{t.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </nav>
+
+      <div className={`${collapsed ? "px-1.5" : "px-2"} pb-2`} ref={searchRef}>
+        {!collapsed && (
+          <div className="relative mb-1">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+            <input
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
+              onFocus={() => setShowSearch(true)}
+              placeholder="Поиск..."
+              className="w-full h-8 pl-8 pr-3 rounded-xl bg-white/10 border border-white/10 text-white text-xs placeholder:text-white/40 outline-none focus:bg-white/20 focus:border-white/20 transition-all"
+            />
+          </div>
+        )}
+        {collapsed && (
+          <button onClick={() => toggleSidebar()} className="w-full flex justify-center py-2 rounded-xl hover:bg-white/10 transition-all" title="Поиск">
+            <Search size={16} className="text-white/60" />
           </button>
         )}
-        <div className="mt-1 space-y-0.5">
-          {projects.filter(p => p.id !== activeProject?.id).map(p => (
-            <button key={p.id} onClick={() => onProjectChange(p)}
-              className="w-full flex items-center gap-2 rounded px-3 py-1.5 hover:opacity-80 transition-opacity"
-              style={{ background: "transparent" }}>
-              <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: getProjectColor(p.key), fontSize: "0.5rem", fontWeight: 700, color: "#fff" }}>
-                {p.key?.slice(0, 1)}
-              </div>
-              <span style={{ color: "var(--sidebar-foreground)", fontSize: "0.75rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-            </button>
-          ))}
-          <button onClick={() => navigate("/projects")}
-            className="w-full flex items-center gap-2 rounded px-3 py-1.5 hover:opacity-80 transition-opacity"
-            style={{ background: "transparent", color: "var(--muted-foreground)" }}>
-            <FolderPlus size={13} />
-            <span style={{ fontSize: "0.75rem" }}>Все проекты</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 pb-2" ref={searchRef}>
-        <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "var(--muted-foreground)" }} />
-          <input value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
-            onFocus={() => setShowSearch(true)}
-            placeholder="Поиск..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg border text-sm" style={{ background: "var(--background)", borderColor: "var(--border)", color: "var(--foreground)" }} />
-        </div>
-        {showSearch && (searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0) && (
-          <div className="mt-1 rounded-lg border shadow-lg max-h-64 overflow-y-auto p-2 space-y-2" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
+        {showSearch && !collapsed && (searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0) && (
+          <div className="mt-1 rounded-xl border border-white/10 bg-white/10 backdrop-blur-md shadow-xl max-h-64 overflow-y-auto p-2 space-y-2">
             {searchResults.tasks.length > 0 && (
               <div>
-                <p style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.25rem" }}>Задачи</p>
+                <p className="text-[10px] font-semibold uppercase text-white/50 mb-1 px-2">Задачи</p>
                 {searchResults.tasks.map((t: any) => (
-                  <button key={t.id} onClick={() => { navigate(`/kanban`); setSearchQuery(""); setShowSearch(false); }}
-                    className="w-full text-left px-2 py-1 rounded hover:opacity-80 transition-opacity">
-                    <p style={{ fontSize: "0.72rem", color: "var(--foreground)" }}>{t.title}</p>
+                  <button key={t.id} onClick={() => { setSelectedTask(t); setSearchQuery(""); setShowSearch(false); }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors">
+                    <p className="text-xs text-white">{t.title}</p>
                   </button>
                 ))}
               </div>
             )}
             {searchResults.projects.length > 0 && (
               <div>
-                <p style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.25rem" }}>Проекты</p>
+                <p className="text-[10px] font-semibold uppercase text-white/50 mb-1 px-2">Проекты</p>
                 {searchResults.projects.map((p: any) => (
-                  <button key={p.id} onClick={() => { navigate(`/projects/${p.id}`); setSearchQuery(""); setShowSearch(false); }}
-                    className="w-full text-left px-2 py-1 rounded hover:opacity-80 transition-opacity flex items-center gap-2">
-                    <div className="w-3 h-3 rounded flex items-center justify-center" style={{ background: getProjectColor(p.key), fontSize: "0.4rem", color: "#fff", fontWeight: 700 }}>{p.key?.slice(0, 1)}</div>
-                    <p style={{ fontSize: "0.72rem", color: "var(--foreground)" }}>{p.name}</p>
+                  <button key={p.id} onClick={() => { onProjectChange(p); navigate("/dashboard"); setSearchQuery(""); setShowSearch(false); }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2">
+                    <div className="w-3 h-3 rounded flex items-center justify-center text-white"
+                      style={{ background: getProjectColor(p.key), fontSize: "6px", fontWeight: 700 }}>{p.key?.slice(0, 1)}</div>
+                    <p className="text-xs text-white">{p.name}</p>
                   </button>
                 ))}
               </div>
             )}
             {searchResults.users.length > 0 && (
               <div>
-                <p style={{ fontSize: "0.65rem", color: "var(--muted-foreground)", fontWeight: 600, textTransform: "uppercase", marginBottom: "0.25rem" }}>Пользователи</p>
+                <p className="text-[10px] font-semibold uppercase text-white/50 mb-1 px-2">Пользователи</p>
                 {searchResults.users.map((u: any) => (
-                  <button key={u.id} onClick={() => { setSearchQuery(""); setShowSearch(false); }}
-                    className="w-full text-left px-2 py-1 rounded hover:opacity-80 transition-opacity flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full flex items-center justify-center text-white" style={{ background: "#6366f1", fontSize: "0.35rem", fontWeight: 600 }}>{getInitials(u.name)}</div>
-                    <p style={{ fontSize: "0.72rem", color: "var(--foreground)" }}>{u.name}</p>
+                  <button key={u.id} onClick={() => { navigate(`/users/${u.id}`); setSearchQuery(""); setShowSearch(false); }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2">
+                    <Avatar name={u.name} size="sm" />
+                    <p className="text-xs text-white">{u.name}</p>
                   </button>
                 ))}
               </div>
@@ -140,48 +215,60 @@ export function Sidebar({ activeProject, projects, onProjectChange, notifCount }
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 pt-3 space-y-0.5 overflow-y-auto">
-        <p style={{ color: "var(--muted-foreground)", fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", paddingLeft: "0.5rem", marginBottom: "0.375rem" }}>Навигация</p>
-        {NAV.map(({ path, label, icon: Icon }) => {
-          const active = location.pathname === path;
-          return (
-            <button key={path} onClick={() => navigate(path)}
-              className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 transition-all"
-              style={{ background: active ? "var(--sidebar-primary)" : "transparent", color: active ? "#fff" : "var(--sidebar-foreground)" }}>
-              <Icon size={15} strokeWidth={active ? 2.5 : 1.8} />
-              <span style={{ fontSize: "0.8rem", fontWeight: active ? 500 : 400 }}>{label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Notifications */}
-      <div className="px-3 pb-2 space-y-0.5">
-        <button onClick={() => navigate("/notifications")}
-          className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-white/5 transition-all"
-          style={{ color: location.pathname === "/notifications" ? "#fff" : "var(--sidebar-foreground)" }}>
-          <Bell size={15} />
-          <span style={{ fontSize: "0.8rem", flex: 1 }}>Уведомления</span>
-          {notifCount > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "var(--sidebar-primary)", color: "#fff", fontSize: "0.65rem" }}>{notifCount}</span>
+      <div className={`${collapsed ? "px-1.5" : "px-2"} pb-1 space-y-0.5`}>
+        <button onClick={() => navigate("/projects")} title={collapsed ? "Проекты" : undefined}
+          className={`w-full flex items-center gap-2.5 rounded-xl ${collapsed ? "justify-center px-2" : "px-2.5"} py-2 transition-all duration-200 ${
+            location.pathname === "/projects" ? "bg-white/20 font-medium text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
+          }`}>
+          <FolderKanban size={16} />
+          {!collapsed && <span className="text-xs">Проекты</span>}
+        </button>
+        <button onClick={() => navigate("/notifications")} title={collapsed ? "Уведомления" : undefined}
+          className={`w-full flex items-center gap-2.5 rounded-xl ${collapsed ? "justify-center px-2" : "px-2.5"} py-2 transition-all duration-200 ${
+            location.pathname === "/notifications" ? "bg-white/20 font-medium text-white" : "text-white/60 hover:bg-white/10 hover:text-white"
+          }`}>
+          <Bell size={16} />
+          {!collapsed && <span className="text-xs flex-1 text-left">Уведомления</span>}
+          {!collapsed && notifCount > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-pink-500 text-white font-bold">{notifCount}</span>
+          )}
+          {collapsed && notifCount > 0 && (
+            <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-pink-500" />
           )}
         </button>
       </div>
 
-      {/* User */}
-      <div className="px-3 py-3 border-t flex items-center gap-2.5" style={{ borderColor: "var(--sidebar-border)" }}>
-        <button onClick={() => navigate("/profile")} className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white hover:opacity-80 transition-opacity" style={{ background: "#6366f1", fontSize: "0.65rem", fontWeight: 600 }}>
-          {getInitials(me?.name || "??")}
-        </button>
-        <button onClick={() => navigate("/profile")} className="min-w-0 flex-1 text-left hover:opacity-80 transition-opacity">
-          <p style={{ color: "var(--sidebar-accent-foreground)", fontSize: "0.75rem", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{me?.name || "Unknown"}</p>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "0.65rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{me?.role || ""}</p>
-        </button>
-        <button onClick={logout} className="p-1 rounded hover:bg-white/10 transition-all" title="Выйти">
-          <LogOut size={14} style={{ color: "var(--muted-foreground)" }} />
+      <div className={`${collapsed ? "px-1.5 py-3" : "px-2 py-3"} border-t border-white/10`}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-2 px-2"}`}>
+          <div className="relative shrink-0">
+            <Avatar name={me?.name || "??"} size="sm" />
+            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#1a1035]" />
+          </div>
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-white truncate">{me?.name || "Unknown"}</p>
+                <p className="text-[10px] text-white/50 truncate">{me?.role || ""}</p>
+              </div>
+              <button onClick={logout} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" title="Выйти">
+                <LogOut size={13} className="text-white/50" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className={`${collapsed ? "px-1.5 pb-2" : "px-2 pb-2"}`}>
+        <button onClick={toggleSidebar}
+          className={`w-full flex items-center gap-2 rounded-xl ${collapsed ? "justify-center px-2" : "px-2.5"} py-2 text-white/50 hover:bg-white/15 hover:text-white transition-all border border-white/10 hover:border-white/20`}
+          title={collapsed ? "Развернуть" : "Свернуть"}>
+          {collapsed ? <ChevronRight size={14} /> : <><ChevronLeft size={14} /><span className="text-[11px]">Свернуть</span></>}
         </button>
       </div>
     </aside>
+    {selectedTask && (
+      <TaskDetailPanel task={selectedTask} onClose={() => setSelectedTask(null)} />
+    )}
+    </>
   );
 }

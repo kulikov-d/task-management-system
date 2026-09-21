@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
+import { useAuthStore } from "../stores/authStore";
+import { canAssignTask } from "../utils/permissions";
+import { SlideOver } from "./ui/slide-over";
+import { Input, Textarea } from "./ui/input";
+import { Select } from "./ui/dropdown";
+import { Button } from "./ui/button";
+import { toast } from "./ui/toast";
 
 interface TaskFormProps {
   task?: any;
@@ -16,6 +22,9 @@ export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
   const loadSprints = useAppStore((s) => s.loadSprints);
   const createTask = useAppStore((s) => s.createTask);
   const updateTask = useAppStore((s) => s.updateTask);
+  const currentUser = useAuthStore((s) => s.user);
+
+  const canAssign = canAssignTask(currentUser?.role || "");
 
   useEffect(() => { loadSprints(projectId); }, [projectId, loadSprints]);
 
@@ -52,7 +61,7 @@ export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
       }
       onSaved();
     } catch (err) {
-      console.error("Failed to save task:", err);
+      toast.error("Не удалось сохранить задачу");
     } finally {
       setSubmitting(false);
     }
@@ -64,164 +73,80 @@ export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
     );
   };
 
-  const inputStyle: React.CSSProperties = {
-    background: "var(--background)",
-    borderColor: "var(--border)",
-    color: "var(--foreground)",
-  };
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.5)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg rounded-xl shadow-xl overflow-hidden"
-        style={{ background: "var(--card)", border: "1px solid var(--border)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: "var(--border)" }}>
-          <h3 style={{ color: "var(--foreground)", fontSize: "1rem", fontWeight: 600 }}>
-            {task ? "Редактировать задачу" : "Новая задача"}
-          </h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-black/5 transition-colors">
-            <X size={16} style={{ color: "var(--muted-foreground)" }} />
-          </button>
+    <SlideOver open onClose={onClose} title={task ? "Редактировать задачу" : "Новая задача"}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Отмена</Button>
+          <Button onClick={handleSubmit as any} disabled={submitting || !title.trim()}>
+            {submitting ? "Сохранение..." : task ? "Сохранить" : "Создать"}
+          </Button>
+        </>
+      }>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-foreground mb-1">Название *</label>
+          <Input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="Название задачи" />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <div>
+          <label className="block text-xs font-medium text-foreground mb-1">Описание</label>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Описание задачи" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Название *</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={inputStyle}
-              placeholder="Название задачи"
-            />
+            <label className="block text-xs font-medium text-foreground mb-1">Приоритет</label>
+            <Select value={priority} onChange={setPriority} options={[
+              { value: "LOW", label: "Низкий" },
+              { value: "MEDIUM", label: "Средний" },
+              { value: "HIGH", label: "Высокий" },
+              { value: "CRITICAL", label: "Критичный" },
+            ]} />
           </div>
-
           <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Описание</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
-              style={inputStyle}
-              placeholder="Описание задачи"
-            />
+            <label className="block text-xs font-medium text-foreground mb-1">Исполнитель</label>
+            <Select value={assigneeId} onChange={setAssigneeId} options={[
+              { value: "", label: "Не назначен" },
+              ...users.map((u: any) => ({ value: u.id, label: u.name })),
+            ]} />
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Приоритет</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={inputStyle}
-              >
-                <option value="LOW">Низкий</option>
-                <option value="MEDIUM">Средний</option>
-                <option value="HIGH">Высокий</option>
-                <option value="CRITICAL">Критичный</option>
-              </select>
-            </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1">Дедлайн</label>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1">Спринт</label>
+            <Select value={sprintId} onChange={setSprintId} options={[
+              { value: "", label: "Без спринта" },
+              ...sprints.map((s: any) => ({ value: s.id, label: s.name })),
+            ]} />
+          </div>
+        </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Исполнитель</label>
-              <select
-                value={assigneeId}
-                onChange={(e) => setAssigneeId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={inputStyle}
-              >
-                <option value="">Не назначен</option>
-                {users.map((u: any) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
+        {tags.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-foreground mb-1">Теги</label>
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((tag: any) => {
+                const selected = selectedTagIds.includes(tag.id);
+                return (
+                  <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)}
+                    className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors border ${
+                      selected ? "border-current" : "border-border text-muted-foreground hover:bg-accent"
+                    }`}
+                    style={selected ? { background: tag.color + "20", color: tag.color } : {}}>
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Дедлайн</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Спринт</label>
-              <select
-                value={sprintId}
-                onChange={(e) => setSprintId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={inputStyle}
-              >
-                <option value="">Без спринта</option>
-                {sprints.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {tags.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: "var(--foreground)" }}>Теги</label>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag: any) => {
-                  const selected = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => toggleTag(tag.id)}
-                      className="px-2 py-1 rounded text-xs font-medium transition-all"
-                      style={{
-                        background: selected ? tag.color + "25" : "var(--muted)",
-                        color: selected ? tag.color : "var(--muted-foreground)",
-                        border: `1px solid ${selected ? tag.color : "var(--border)"}`,
-                      }}
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              style={{ color: "var(--muted-foreground)", background: "var(--muted)" }}
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !title.trim()}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50"
-              style={{ background: "#6366f1" }}
-            >
-              {submitting ? "Сохранение..." : task ? "Сохранить" : "Создать"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        )}
+      </form>
+    </SlideOver>
   );
 }

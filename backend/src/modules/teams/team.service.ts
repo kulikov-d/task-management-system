@@ -27,6 +27,11 @@ export async function listTeams(request: FastifyRequest, reply: FastifyReply) {
             user: { select: { id: true, name: true, email: true, avatar: true, role: true } },
           },
         },
+        projects: {
+          include: {
+            project: { select: { id: true, name: true, key: true, description: true } },
+          },
+        },
         _count: { select: { members: true, projects: true } },
       },
       orderBy: { createdAt: "asc" },
@@ -40,6 +45,11 @@ export async function listTeams(request: FastifyRequest, reply: FastifyReply) {
         members: {
           include: {
             user: { select: { id: true, name: true, email: true, avatar: true, role: true } },
+          },
+        },
+        projects: {
+          include: {
+            project: { select: { id: true, name: true, key: true, description: true } },
           },
         },
         _count: { select: { members: true, projects: true } },

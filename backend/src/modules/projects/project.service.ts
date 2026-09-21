@@ -3,11 +3,13 @@ import { z } from "zod";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
 import { emitToProject, emitToAll } from "../../config/socket";
+import { createAndEmitNotification } from "../notifications/notification.helper";
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
   key: z.string().min(2).max(10).toUpperCase(),
+  memberIds: z.array(z.string()).optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -95,12 +97,19 @@ export async function createProject(request: FastifyRequest, reply: FastifyReply
   const existingKey = await prisma.project.findUnique({ where: { key: data.key } });
   if (existingKey) throw new AppError("Project key already exists", 409);
 
+  const memberIds = (data.memberIds || []).filter((id) => id !== userId);
+
   const project = await prisma.project.create({
     data: {
-      ...data,
+      name: data.name,
+      description: data.description,
+      key: data.key,
       ownerId: userId,
       members: {
-        create: { userId, role: "admin" },
+        create: [
+          { userId, role: "admin" },
+          ...memberIds.map((id) => ({ userId: id, role: "developer" as const })),
+        ],
       },
     },
     include: {
@@ -108,6 +117,15 @@ export async function createProject(request: FastifyRequest, reply: FastifyReply
       _count: { select: { tasks: true, members: true } },
     },
   });
+
+  for (const memberId of memberIds) {
+    await createAndEmitNotification({
+      type: "project:assigned",
+      title: "Назначен на проект",
+      message: `Вы добавлены в проект "${data.name}"`,
+      userId: memberId,
+    });
+  }
 
   emitToAll("project:created", project);
   return reply.code(201).send(project);
@@ -145,10 +163,14 @@ export async function updateProject(request: FastifyRequest, reply: FastifyReply
 export async function deleteProject(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
   const userId = request.userId!;
+  const userRole = request.userRole!;
 
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) throw new AppError("Project not found", 404);
-  if (project.ownerId !== userId) throw new AppError("Only the owner can delete the project", 403);
+
+  if (project.ownerId !== userId && userRole !== "admin") {
+    throw new AppError("Only the owner or admin can delete the project", 403);
+  }
 
   await prisma.project.delete({ where: { id } });
   emitToAll("project:deleted", { projectId: id });
@@ -161,6 +183,9 @@ export async function addMember(request: FastifyRequest, reply: FastifyReply) {
   const { userId: memberId, role } = request.body as { userId: string; role?: string };
   const validRoles = ["admin", "lead", "developer"];
   const memberRole = role && validRoles.includes(role) ? role : "developer";
+
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) throw new AppError("Project not found", 404);
 
   const requesterMembership = await prisma.projectMember.findUnique({
     where: { projectId_userId: { projectId: id, userId } },
@@ -181,6 +206,14 @@ export async function addMember(request: FastifyRequest, reply: FastifyReply) {
   });
 
   emitToProject(id, "project:memberAdded", { projectId: id, member });
+
+  await createAndEmitNotification({
+    type: "project:assigned",
+    title: "Назначен на проект",
+    message: `Вы добавлены в проект "${project.name}"`,
+    userId: memberId,
+  });
+
   return reply.code(201).send(member);
 }
 

@@ -23,6 +23,7 @@ import { userPlugin } from "./modules/users/user.routes";
 import { sprintPlugin } from "./modules/sprints/sprint.routes";
 import { searchPlugin } from "./modules/search/search.routes";
 import { teamPlugin } from "./modules/teams/team.routes";
+import { timeEntryPlugin } from "./modules/time-entries/time-entries.routes";
 
 async function main() {
   await connectDatabase();
@@ -40,6 +41,7 @@ async function main() {
       }
     },
     credentials: true,
+    methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   });
   await fastify.register(fastifyCookie);
   await fastify.register(fastifyMultipart);
@@ -67,6 +69,7 @@ async function main() {
   await fastify.register(sprintPlugin, { prefix: "/api/sprints" });
   await fastify.register(searchPlugin, { prefix: "/api/search" });
   await fastify.register(teamPlugin, { prefix: "/api/teams" });
+  await fastify.register(timeEntryPlugin, { prefix: "/api/time-entries" });
 
   fastify.setErrorHandler(errorHandler);
 

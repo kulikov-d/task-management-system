@@ -1,4 +1,4 @@
-import type { User, Project, ProjectMember, Task, Tag, Comment, Attachment, Notification, AuditLog, AuthResponse, PaginatedResponse, Sprint } from "../types/api";
+import type { User, Project, ProjectMember, Task, Tag, Comment, Attachment, Notification, AuditLog, AuthResponse, PaginatedResponse, Sprint, TimeEntry } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -19,7 +19,7 @@ async function request<T>(
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
   };
-  if (options.body && !headers["Content-Type"]) {
+  if (options.body && !(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -95,7 +95,7 @@ export const authApi = {
 export const projectsApi = {
   list: () => request<Project[]>("/projects"),
   get: (id: string) => request<Project & { members: ProjectMember[] }>(`/projects/${id}`),
-  create: (data: { name: string; key: string; description?: string }) =>
+  create: (data: { name: string; key: string; description?: string; memberIds?: string[] }) =>
     request<Project>("/projects", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: { name?: string; description?: string }) =>
     request<Project>(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -172,19 +172,13 @@ export const tagsApi = {
 // Attachments
 export const attachmentsApi = {
   list: (taskId: string) => request<Attachment[]>(`/tasks/${taskId}/attachments`),
-  upload: async (taskId: string, file: File) => {
+  upload: (taskId: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const headers: Record<string, string> = {};
-    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-    const res = await fetch(`${API_BASE}/tasks/${taskId}/attachments`, {
+    return request<Attachment>(`/tasks/${taskId}/attachments`, {
       method: "POST",
-      headers,
       body: formData,
-      credentials: "include",
     });
-    if (!res.ok) throw new Error("Upload failed");
-    return res.json() as Promise<Attachment>;
   },
   download: (id: string) => `${API_BASE}/attachments/${id}/download`,
   delete: (id: string) =>
@@ -249,6 +243,35 @@ export const searchApi = {
   global: (q: string) => request<{ tasks: any[]; projects: any[]; users: any[] }>(`/search?q=${encodeURIComponent(q)}`),
 };
 
+// Time Tracking
+export const timeTrackingApi = {
+  start: (taskId: string, description?: string) =>
+    request<TimeEntry>("/time-entries", {
+      method: "POST",
+      body: JSON.stringify({ taskId, description }),
+    }),
+  stop: (id: string) =>
+    request<TimeEntry>(`/time-entries/${id}/stop`, { method: "PUT" }),
+  active: () =>
+    request<TimeEntry | null>("/time-entries/active"),
+  listByTask: (taskId: string) =>
+    request<TimeEntry[]>(`/time-entries/task/${taskId}`),
+  listByProject: (projectId: string) =>
+    request<TimeEntry[]>(`/time-entries/project/${projectId}`),
+  stats: (projectId: string, sprintId?: string) => {
+    const params = `?projectId=${projectId}${sprintId ? `&sprintId=${sprintId}` : ""}`;
+    return request<{
+      totalSeconds: number;
+      totalEntries: number;
+      byUser: { user: User; totalSeconds: number; entries: number }[];
+      byTask: { task: { id: string; title: string; status?: string }; totalSeconds: number; entries: number }[];
+      byDay: { date: string; totalSeconds: number }[];
+    }>(`/time-entries/project/${projectId}/stats${params}`);
+  },
+  delete: (id: string) =>
+    request<void>(`/time-entries/${id}`, { method: "DELETE" }),
+};
+
 // Users
 export const usersApi = {
   list: () => request<User[]>("/users"),
@@ -300,7 +323,7 @@ export const teamsApi = {
   create: (data: { name: string; description?: string }) =>
     request<Team>("/teams", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: { name?: string; description?: string }) =>
-    request<Team>(`/teams/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    request<Team>(`/teams/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: string) => request<void>(`/teams/${id}`, { method: "DELETE" }),
   addMember: (id: string, data: { userId: string; role: string }) =>
     request<TeamMember>(`/teams/${id}/members`, { method: "POST", body: JSON.stringify(data) }),

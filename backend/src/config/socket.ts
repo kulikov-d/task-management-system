@@ -1,4 +1,4 @@
-import { Server as HttpServer } from "http";
+import { Server as HttpServer, IncomingMessage } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { URL } from "url";
 import { verifyAccessToken } from "../modules/auth/auth.service";
@@ -6,6 +6,7 @@ import { verifyAccessToken } from "../modules/auth/auth.service";
 let wss: WebSocketServer;
 
 const rooms = new Map<string, Set<WebSocket>>();
+const pendingAuth = new Map<IncomingMessage, { userId: string; role: string }>();
 
 function joinRoom(ws: WebSocket, roomId: string) {
   if (!rooms.has(roomId)) rooms.set(roomId, new Set());
@@ -62,8 +63,7 @@ export function initSocket(server: HttpServer): WebSocketServer {
       }
 
       const payload = await verifyAccessToken(token);
-      (socket as any).userId = payload.userId;
-      (socket as any).userRole = payload.role;
+      pendingAuth.set(request, { userId: payload.userId, role: payload.role });
 
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit("connection", ws, request);
@@ -74,8 +74,18 @@ export function initSocket(server: HttpServer): WebSocketServer {
     }
   });
 
-  wss.on("connection", (ws: WebSocket) => {
-    const userId = (ws as any).userId as string;
+  wss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
+    const auth = pendingAuth.get(request);
+    pendingAuth.delete(request);
+
+    if (!auth) {
+      ws.close(1008, "Unauthorized");
+      return;
+    }
+
+    (ws as any).userId = auth.userId;
+    (ws as any).userRole = auth.role;
+    const userId = auth.userId;
     console.log(`✓ User connected: ${userId}`);
 
     joinRoom(ws, `user:${userId}`);
@@ -112,8 +122,6 @@ export function initSocket(server: HttpServer): WebSocketServer {
 }
 
 export function emitToProject(projectId: string, event: string, data: any) {
-  const roomSize = rooms.get(`project:${projectId}`)?.size || 0;
-  console.log(`→ Emitting "${event}" to project:${projectId} (${roomSize} listeners)`);
   broadcastToRoom(`project:${projectId}`, event, data);
 }
 

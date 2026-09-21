@@ -14,6 +14,9 @@ const ALLOWED_MIMES = [
   "application/json",
 ];
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+
 export async function listAttachments(request: FastifyRequest, reply: FastifyReply) {
   const { taskId } = request.params as { taskId: string };
   const attachments = await prisma.attachment.findMany({
@@ -44,13 +47,24 @@ export async function uploadAttachment(request: FastifyRequest, reply: FastifyRe
   const filePath = path.join(process.cwd(), "uploads", savedFilename);
 
   let fileSize = 0;
+  let tooLarge = false;
   const fileStream = fs.createWriteStream(filePath);
   for await (const chunk of file.file) {
     fileSize += chunk.length;
+    if (fileSize > MAX_FILE_SIZE) {
+      tooLarge = true;
+      fileStream.destroy();
+      break;
+    }
     fileStream.write(chunk);
   }
   fileStream.end();
   await new Promise<void>((resolve) => fileStream.on("finish", resolve));
+
+  if (tooLarge) {
+    fs.unlink(filePath, () => {});
+    throw new AppError("File too large (max 10MB)", 400);
+  }
 
   const attachment = await prisma.attachment.create({
     data: {
@@ -84,10 +98,14 @@ export async function downloadAttachment(request: FastifyRequest, reply: Fastify
   if (!attachment) throw new AppError("Attachment not found", 404);
 
   const filePath = path.join(process.cwd(), attachment.url);
+  const resolvedPath = path.resolve(filePath);
+  if (!resolvedPath.startsWith(UPLOADS_DIR)) {
+    throw new AppError("Invalid file path", 400);
+  }
   return reply
     .type("application/octet-stream")
     .header("Content-Disposition", `attachment; filename="${attachment.filename}"`)
-    .send(fs.createReadStream(filePath));
+    .send(fs.createReadStream(resolvedPath));
 }
 
 export async function deleteAttachment(request: FastifyRequest, reply: FastifyReply) {
@@ -97,11 +115,14 @@ export async function deleteAttachment(request: FastifyRequest, reply: FastifyRe
   if (!attachment) throw new AppError("Attachment not found", 404);
 
   const filePath = path.join(process.cwd(), attachment.url);
+  const resolvedPath = path.resolve(filePath);
   await prisma.attachment.delete({ where: { id } });
 
-  fs.unlink(filePath, (err) => {
-    if (err) console.error("Failed to delete file from disk:", filePath, err);
-  });
+  if (resolvedPath.startsWith(UPLOADS_DIR)) {
+    fs.unlink(resolvedPath, (err) => {
+      if (err) console.error("Failed to delete file from disk:", resolvedPath, err);
+    });
+  }
 
   await auditLog("delete", "Attachment", id);
   return reply.code(204).send();

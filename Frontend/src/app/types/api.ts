@@ -50,6 +50,7 @@ export interface Task {
   position: number;
   tags: TaskTag[];
   _count?: { comments: number; attachments: number };
+  totalTimeSpent?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,6 +130,19 @@ export interface Sprint {
 export interface AuthResponse {
   user: User;
   accessToken: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  userId: string;
+  description?: string | null;
+  startedAt: string;
+  stoppedAt?: string | null;
+  duration?: number | null;
+  user?: User;
+  task?: { id: string; title: string; status?: string; projectId?: string };
+  createdAt: string;
 }
 
 export interface PaginatedResponse<T> {
