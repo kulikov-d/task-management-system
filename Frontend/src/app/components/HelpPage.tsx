@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Shield, UserCog, User as UserIcon, ChevronDown, Search, Monitor, MousePointerClick, ListChecks, ClipboardList, BarChart2, Users, Zap, Bell, FolderKanban, Timer, MessageSquare, Paperclip, Settings2, HelpCircle, Keyboard, Calendar as CalendarIcon, GanttChart, ScrollText, BookOpen } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useAppStore } from "../stores/appStore";
+import { getRoleLabel } from "../utils/helpers";
 import { Card, CardContent } from "./ui/card";
 
 interface GuideItem {
@@ -18,10 +19,10 @@ interface GuideSection {
   items: GuideItem[];
 }
 
-const ROLE_LABELS: Record<string, { label: string; icon: any }> = {
-  admin: { label: "Администратор", icon: Shield },
-  lead: { label: "Тимлид", icon: UserCog },
-  developer: { label: "Разработчик", icon: UserIcon },
+const ROLE_ICONS: Record<string, any> = {
+  admin: Shield,
+  lead: UserCog,
+  developer: UserIcon,
 };
 
 const SECTIONS: GuideSection[] = [
@@ -71,7 +72,7 @@ const SECTIONS: GuideSection[] = [
         title: "Изменить статус перетаскиванием",
         steps: [
           "Нажмите и удерживайте карточку задачи левой кнопкой мыши.",
-          "Перетащите её в нужную колонку: TODO → В работе → На ревью → Готово.",
+          "Перетащите её в нужную колонку: TODO → В работе → На проверке → Готово.",
           "Отпустите — статус сохранится автоматически.",
         ],
       },
@@ -79,7 +80,7 @@ const SECTIONS: GuideSection[] = [
         title: "Контекстное меню (правая кнопка мыши)",
         steps: [
           "Кликните по карточке ПРАВОЙ кнопкой мыши.",
-          "В меню: «Назначить себя», «В работу», «На ревью», «Готово», «Скопировать ID», «Удалить».",
+          "В меню: «Назначить себя», «В работу», «На проверке», «Готово», «Скопировать ID», «Удалить».",
           "Выберите действие — оно выполнится сразу.",
         ],
       },
@@ -457,9 +458,9 @@ function Section({ section }: { section: GuideSection }) {
 
 export function HelpPage() {
   const { user } = useAuthStore();
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const role = user?.role || "developer";
-  const roleCfg = ROLE_LABELS[role] || ROLE_LABELS.developer;
-  const RoleIcon = roleCfg.icon;
+  const RoleIcon = ROLE_ICONS[role] || ROLE_ICONS.developer;
   const visible = SECTIONS.filter((s) => s.roles.includes(role));
 
   return (
@@ -478,7 +479,7 @@ export function HelpPage() {
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
           style={{ background: "var(--accent)" }}>
           <RoleIcon size={13} className="text-primary" />
-          <span className="text-xs font-semibold text-foreground">Ваша роль: {roleCfg.label}</span>
+          <span className="text-xs font-semibold text-foreground">Ваша роль: {getRoleLabel(role, roleSettings)}</span>
         </div>
       </div>
 
@@ -488,7 +489,7 @@ export function HelpPage() {
           <HelpCircle size={16} className="text-primary shrink-0 mt-0.5" />
           <div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Здесь собраны инструкции, адаптированные под вашу роль <b className="text-foreground">{roleCfg.label.toLowerCase()}</b>.
+              Здесь собраны инструкции, адаптированные под вашу роль <b className="text-foreground">{getRoleLabel(role, roleSettings).toLowerCase()}</b>.
               Разделы, недоступные вашей роли, скрыты автоматически. Нажмите на тему, чтобы раскрыть пошаговые инструкции.
             </p>
           </div>

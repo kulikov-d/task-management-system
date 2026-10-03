@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { LayoutDashboard, BarChart2, ClipboardList, Bell, Users, Zap, LogOut, Search, FolderKanban, Settings, Star, ChevronLeft, ChevronRight, ListChecks, Shield, HelpCircle } from "lucide-react";
+import { LayoutDashboard, BarChart2, ClipboardList, Bell, Users, Zap, LogOut, Search, FolderKanban, Settings, Star, ChevronLeft, ChevronRight, ListChecks, Shield, HelpCircle, CalendarDays, GanttChart } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useAppStore } from "../stores/appStore";
-import { getProjectColor } from "../utils/helpers";
+import { getProjectColor, getRoleLabel } from "../utils/helpers";
 import { searchApi } from "../api/client";
 import { Avatar } from "./ui/avatar";
 import { TaskDetailPanel } from "./kanban/TaskDetailPanel";
@@ -19,9 +19,13 @@ const NAV = [
   { path: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
   { path: "/my-tasks", label: "Мои задачи", icon: ListChecks },
   { path: "/tasks", label: "Задачи", icon: ClipboardList },
+  { path: "/backlog", label: "Бэклог", icon: FolderKanban },
+  { path: "/sprints", label: "Спринты", icon: CalendarDays },
+  { path: "/planning", label: "Планирование", icon: GanttChart },
   { path: "/analytics", label: "Аналитика", icon: BarChart2 },
   { path: "/team", label: "Команда", icon: Users },
   { path: "/audit", label: "Аудит", icon: Shield, adminOnly: true },
+  { path: "/admin", label: "Администрирование", icon: Shield, adminOnly: true },
   { path: "/help", label: "Помощь", icon: HelpCircle },
 ];
 
@@ -35,6 +39,7 @@ export function Sidebar({ activeProject, projects, onProjectChange, notifCount }
   const tasks = useAppStore((s) => s.tasks);
   const favoriteProjectIds = useAppStore((s) => s.favoriteProjectIds);
   const toggleFavoriteProject = useAppStore((s) => s.toggleFavoriteProject);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ tasks: any[]; projects: any[]; users: any[] }>({ tasks: [], projects: [], users: [] });
   const [showSearch, setShowSearch] = useState(false);
@@ -86,7 +91,7 @@ export function Sidebar({ activeProject, projects, onProjectChange, notifCount }
             </div>
             <span className="text-xs font-semibold text-white truncate">{activeProject.name}</span>
           </button>
-          <button onClick={() => navigate(`/projects/${activeProject.id}`)}
+          <button onClick={() => navigate(`/projects/${activeProject.id}/settings`)}
             className="p-2 rounded-xl text-white/50 hover:bg-white/15 hover:text-white transition-all duration-200"
             title="Настройки проекта">
             <Settings size={14} />
@@ -248,7 +253,7 @@ export function Sidebar({ activeProject, projects, onProjectChange, notifCount }
             <>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-white truncate">{me?.name || "Unknown"}</p>
-                <p className="text-[10px] text-white/50 truncate">{me?.role || ""}</p>
+                <p className="text-[10px] text-white/50 truncate">{getRoleLabel(me?.role || "", roleSettings)}</p>
               </div>
               <button onClick={logout} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors" title="Выйти">
                 <LogOut size={13} className="text-white/50" />

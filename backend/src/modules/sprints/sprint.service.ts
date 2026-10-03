@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
 import { emitToProject } from "../../config/socket";
+import { auditLog } from "../../common/middleware/audit.middleware";
 
 const createSprintSchema = z.object({
   name: z.string().min(1).max(100),
@@ -109,4 +110,32 @@ export async function deleteSprint(request: FastifyRequest, reply: FastifyReply)
   await prisma.sprint.delete({ where: { id } });
   emitToProject(sprint.projectId, "sprint:deleted", { sprintId: id });
   return reply.code(204).send();
+}
+
+export async function completeSprint(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+
+  const sprint = await prisma.sprint.findUnique({ where: { id } });
+  if (!sprint) throw new AppError("Sprint not found", 404);
+
+  // Незавершённые задачи возвращаются в бэклог (как в Jira)
+  const moved = await prisma.task.updateMany({
+    where: { sprintId: id, status: { not: "DONE" } },
+    data: { sprintId: null },
+  });
+
+  const updated = await prisma.sprint.update({
+    where: { id },
+    data: { isActive: false },
+    include: { _count: { select: { tasks: true } } },
+  });
+
+  emitToProject(sprint.projectId, "sprint:completed", {
+    sprint: updated,
+    movedToBacklog: moved.count,
+  });
+
+  await auditLog("complete", "Sprint", id, { movedToBacklog: moved.count }, request.userId!);
+
+  return reply.send({ sprint: updated, movedToBacklog: moved.count });
 }

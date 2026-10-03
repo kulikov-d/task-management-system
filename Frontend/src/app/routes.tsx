@@ -8,6 +8,9 @@ import { ToastContainer } from "./components/ui/toast";
 
 const Dashboard = lazy(() => import("./components/Dashboard").then(m => ({ default: m.Dashboard })));
 const TasksPage = lazy(() => import("./components/TasksPage").then(m => ({ default: m.TasksPage })));
+const SprintManager = lazy(() => import("./components/SprintManager").then(m => ({ default: m.SprintManager })));
+const Backlog = lazy(() => import("./components/Backlog").then(m => ({ default: m.Backlog })));
+const PlanningPage = lazy(() => import("./components/PlanningPage").then(m => ({ default: m.PlanningPage })));
 const MyTasks = lazy(() => import("./components/MyTasks").then(m => ({ default: m.MyTasks })));
 const Analytics = lazy(() => import("./components/Analytics").then(m => ({ default: m.Analytics })));
 const AuditLog = lazy(() => import("./components/AuditLog").then(m => ({ default: m.AuditLog })));
@@ -20,6 +23,8 @@ const Profile = lazy(() => import("./components/Profile").then(m => ({ default: 
 const UserProfile = lazy(() => import("./components/UserProfile").then(m => ({ default: m.UserProfile })));
 const NotFound = lazy(() => import("./components/NotFound").then(m => ({ default: m.NotFound })));
 const HelpPage = lazy(() => import("./components/HelpPage").then(m => ({ default: m.HelpPage })));
+const InvitePage = lazy(() => import("./components/InvitePage").then(m => ({ default: m.InvitePage })));
+const AdminPage = lazy(() => import("./components/AdminPage").then(m => ({ default: m.AdminPage })));
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, loadUser } = useAuthStore();
@@ -53,6 +58,13 @@ function TasksRoute() {
   return <TasksPage project={project} />;
 }
 
+function SprintsRoute() {
+  const { projects, currentProject } = useAppStore();
+  const project = currentProject || projects[0];
+  if (!project) return <div className="p-8 text-center text-xs text-muted-foreground">Нет проектов</div>;
+  return <SprintManager project={project} />;
+}
+
 function AnalyticsRoute() {
   const { projects, currentProject } = useAppStore();
   const project = currentProject || projects[0];
@@ -70,11 +82,15 @@ export function AppRoutes() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/invite/:token" element={<InvitePage />} />
         <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardRoute />} />
           <Route path="my-tasks" element={<MyTasks />} />
           <Route path="tasks" element={<TasksRoute />} />
+          <Route path="backlog" element={<Backlog />} />
+          <Route path="sprints" element={<SprintsRoute />} />
+          <Route path="planning" element={<PlanningPage />} />
           <Route path="analytics" element={<AnalyticsRoute />} />
           <Route path="team" element={<TeamView />} />
           <Route path="audit" element={<AuditLog />} />
@@ -82,6 +98,7 @@ export function AppRoutes() {
           <Route path="help" element={<HelpPage />} />
           <Route path="users/:id" element={<UserProfile />} />
           <Route path="notifications" element={<NotificationsRoute />} />
+          <Route path="admin" element={<AdminPage />} />
           <Route path="projects" element={<ProjectList />} />
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="projects/:id/settings" element={<ProjectSettings />} />

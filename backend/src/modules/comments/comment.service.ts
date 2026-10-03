@@ -43,7 +43,7 @@ export async function createComment(request: FastifyRequest, reply: FastifyReply
 
   emitToTask(taskId, "comment:new", { comment, taskId });
 
-  await auditLog("comment", "Task", taskId, { content: content.substring(0, 100) });
+  await auditLog("comment", "Task", taskId, { content: content.substring(0, 100) }, userId);
 
   return reply.code(201).send(comment);
 }

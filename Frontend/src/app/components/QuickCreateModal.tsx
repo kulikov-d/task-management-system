@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
+import { getUserLabel } from "../utils/helpers";
 import { toast } from "./ui/toast";
 
 interface QuickCreateModalProps {
@@ -18,6 +19,7 @@ export function QuickCreateModal({ onClose }: QuickCreateModalProps) {
   const currentProject = useAppStore((s) => s.currentProject);
   const projects = useAppStore((s) => s.projects);
   const users = useAppStore((s) => s.users);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const createTask = useAppStore((s) => s.createTask);
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState(currentProject?.id || projects[0]?.id || "");
@@ -99,7 +101,7 @@ export function QuickCreateModal({ onClose }: QuickCreateModalProps) {
               className="w-full h-9 px-2 rounded-lg bg-background border border-border text-xs text-foreground outline-none focus:border-primary transition-colors">
               <option value="">Не назначен</option>
               {users.map((u: any) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+                <option key={u.id} value={u.id}>{getUserLabel(u, roleSettings)}</option>
               ))}
             </select>
           </div>

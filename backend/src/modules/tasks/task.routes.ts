@@ -11,6 +11,11 @@ import {
   moveTask,
   addTagToTask,
   removeTagFromTask,
+  createSubtask,
+  updateSubtask,
+  deleteSubtask,
+  createTaskLink,
+  deleteTaskLink,
 } from "./task.service";
 
 export async function taskPlugin(fastify: FastifyInstance) {
@@ -25,4 +30,9 @@ export async function taskPlugin(fastify: FastifyInstance) {
   fastify.put("/:id/move", moveTask);
   fastify.post("/:id/tags", addTagToTask);
   fastify.delete("/:id/tags/:tagId", removeTagFromTask);
+  fastify.post("/:id/subtasks", createSubtask);
+  fastify.patch("/subtasks/:subtaskId", updateSubtask);
+  fastify.delete("/subtasks/:subtaskId", deleteSubtask);
+  fastify.post("/:id/links", createTaskLink);
+  fastify.delete("/:id/links/:linkId", deleteTaskLink);
 }

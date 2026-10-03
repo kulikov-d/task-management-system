@@ -10,6 +10,8 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { CommandPalette } from "../ui/command-palette";
 import { ContextMenu } from "../ui/context-menu";
 import { ThemeToggle } from "../ui/theme-toggle";
+import { NotificationDropdown } from "../ui/notification-dropdown";
+import { TimerBar } from "../TimerBar";
 import { QuickCreateModal } from "../QuickCreateModal";
 
 export function AppLayout() {
@@ -18,8 +20,11 @@ export function AppLayout() {
   const loadProjects = useAppStore((s) => s.loadProjects);
   const loadUsers = useAppStore((s) => s.loadUsers);
   const loadUnreadCount = useAppStore((s) => s.loadUnreadCount);
+  const loadRoleSettings = useAppStore((s) => s.loadRoleSettings);
+  const loadActiveTimer = useAppStore((s) => s.loadActiveTimer);
   const loadTasks = useAppStore((s) => s.loadTasks);
   const loadTags = useAppStore((s) => s.loadTags);
+  const loadSprints = useAppStore((s) => s.loadSprints);
   const setCurrentProject = useAppStore((s) => s.setCurrentProject);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const notifCount = useAppStore((s) => s.unreadCount);
@@ -32,6 +37,8 @@ export function AppLayout() {
     loadProjects();
     loadUsers();
     loadUnreadCount();
+    loadRoleSettings();
+    loadActiveTimer();
   }, []);
 
   useEffect(() => {
@@ -49,6 +56,7 @@ export function AppLayout() {
     if (currentProject) {
       loadTasks(currentProject.id);
       loadTags(currentProject.id);
+      loadSprints(currentProject.id);
       joinProject(currentProject.id);
       return () => leaveProject(currentProject.id);
     }
@@ -72,6 +80,8 @@ export function AppLayout() {
         <div className="flex items-center justify-between px-4 pt-3 pb-0">
           <Breadcrumbs />
           <div className="flex items-center">
+            <TimerBar />
+            <NotificationDropdown />
             <ThemeToggle />
             <button onClick={() => setShowQuickCreate(true)}
               className="ml-4 flex items-center gap-1.5 px-4 py-2.5 rounded-lg gradient-primary text-white text-xs font-medium shadow-sm hover:shadow-md transition-all active:scale-95">

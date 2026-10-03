@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useAppStore } from "../stores/appStore";
-import { TrendingUp, Target, CheckCircle, Clock, BarChart3, Timer } from "lucide-react";
+import { TrendingUp, Target, CheckCircle, Clock, BarChart3, Timer, Download } from "lucide-react";
+import { getAccessToken } from "../api/client";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Avatar } from "./ui/avatar";
 import { Progress } from "./ui/progress";
 import { Select } from "./ui/dropdown";
 import { Workload } from "./Workload";
 import { TimeTrackingAnalytics } from "./TimeTrackingAnalytics";
+import { toast } from "./ui/toast";
 
 const ANALYTICS_TABS = [
   { id: "overview", label: "Обзор", icon: TrendingUp },
@@ -46,6 +48,28 @@ export function Analytics({ project }: { project: any }) {
   const pct = projectTasks.length ? Math.round(done / projectTasks.length * 100) : 0;
   const overdue = projectTasks.filter((t: any) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE").length;
 
+  const handleExport = async (format: "csv" | "pdf") => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000/api"}/analytics/export?projectId=${project.id}&format=${format}`, {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Не удалось выгрузить отчёт");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tasks-${project.key || project.id}.${format === "pdf" ? "pdf" : "csv"}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Отчёт выгружен");
+    } catch (err: any) {
+      toast.error(err.message || "Не удалось выгрузить отчёт");
+    }
+  };
+
   const currentVelocity = velocityData.length > 0 ? velocityData[velocityData.length - 1]?.completed ?? 0 : 0;
   const avgVelocity = velocityData.length > 0
     ? Math.round(velocityData.reduce((sum: number, v: any) => sum + (v.completed || 0), 0) / velocityData.length * 10) / 10
@@ -74,10 +98,20 @@ export function Analytics({ project }: { project: any }) {
             <h2 className="text-lg font-semibold text-foreground">Аналитика</h2>
             <p className="text-xs text-muted-foreground mt-0.5">{project.name}</p>
           </div>
-          {activeTab === "overview" && (
-            <Select value={selectedSprintId || ""} onChange={(v) => setSelectedSprintId(v || null)}
-              options={[{ value: "", label: "Все спринты" }, ...sprints.map((s) => ({ value: s.id, label: s.name }))]} />
-          )}
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleExport("csv")} title="Выгрузить CSV"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+              <Download size={12} /> CSV
+            </button>
+            <button onClick={() => handleExport("pdf")} title="Выгрузить PDF"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+              <Download size={12} /> PDF
+            </button>
+            {activeTab === "overview" && (
+              <Select value={selectedSprintId || ""} onChange={(v) => setSelectedSprintId(v || null)}
+                options={[{ value: "", label: "Все спринты" }, ...sprints.map((s) => ({ value: s.id, label: s.name }))]} />
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1 -mb-px">
           {ANALYTICS_TABS.map(({ id, label, icon: Icon }) => (

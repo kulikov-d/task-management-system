@@ -134,7 +134,7 @@ export function Calendar() {
                         t.status === "IN_PROGRESS" ? "bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400" :
                         "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400"
                       }`}>
-                        {t.status === "TODO" ? "К выполнению" : t.status === "IN_PROGRESS" ? "В работе" : t.status === "IN_REVIEW" ? "На ревью" : "Готово"}
+                        {t.status === "TODO" ? "К выполнению" : t.status === "IN_PROGRESS" ? "В работе" : t.status === "IN_REVIEW" ? "На проверке" : "Готово"}
                       </span>
                     </div>
                   );

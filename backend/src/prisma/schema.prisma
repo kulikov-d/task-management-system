@@ -63,8 +63,32 @@ model User {
   teamMemberships   TeamMember[]
   projectExclusions ProjectExclusion[]
   timeEntries       TimeEntry[]
+  invitationsSent   Invitation[]        @relation("InvitationsSent")
 
   @@index([email])
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String
+  name        String?
+  token       String    @unique
+  role        Role      @default(developer)
+  invitedById String
+  invitedBy   User      @relation("InvitationsSent", fields: [invitedById], references: [id])
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
+}
+
+model RoleSetting {
+  id          String   @id @default(cuid())
+  role        Role     @unique
+  displayName String
+  updatedAt   DateTime @updatedAt
 }
 
 model Project {
@@ -191,11 +215,42 @@ model Task {
   attachments Attachment[]
   events      Event[]
   timeEntries TimeEntry[]
+  subtasks    Subtask[]
+  linksOut    TaskLink[] @relation("TaskLinkSource")
+  linksIn     TaskLink[] @relation("TaskLinkTarget")
 
   @@index([projectId, status])
   @@index([assigneeId])
   @@index([dueDate])
   @@index([sprintId])
+}
+
+model Subtask {
+  id        String   @id @default(cuid())
+  title     String
+  completed Boolean  @default(false)
+  position  Int      @default(0)
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+model TaskLink {
+  id           String   @id @default(cuid())
+  sourceTaskId String
+  sourceTask   Task     @relation("TaskLinkSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
+  targetTaskId String
+  targetTask   Task     @relation("TaskLinkTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
+  /// "blocks" — sourceTask блокирует targetTask; "related" — простая связь
+  type         String   @default("blocks")
+  createdAt    DateTime @default(now())
+
+  @@unique([sourceTaskId, targetTaskId, type])
+  @@index([sourceTaskId])
+  @@index([targetTaskId])
 }
 
 model Tag {

@@ -1,11 +1,12 @@
 interface CardProps {
   className?: string;
   children: React.ReactNode;
+  onClick?: () => void | Promise<void>;
 }
 
-export function Card({ className = "", children }: CardProps) {
+export function Card({ className = "", children, onClick }: CardProps) {
   return (
-    <div className={`rounded-xl bg-card text-card-foreground transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5 ${className}`}>
+    <div onClick={onClick} className={`rounded-xl bg-card text-card-foreground transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5 ${className}`}>
       {children}
     </div>
   );

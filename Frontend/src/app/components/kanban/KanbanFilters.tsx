@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Filter, X } from "lucide-react";
 import { Select } from "../ui/dropdown";
+import { useAppStore } from "../../stores/appStore";
+import { getUserLabel } from "../../utils/helpers";
 
 interface KanbanFiltersProps {
   users: any[];
@@ -11,6 +13,7 @@ interface KanbanFiltersProps {
 
 export function KanbanFilters({ users, tags, filters, onChange }: KanbanFiltersProps) {
   const [open, setOpen] = useState(false);
+  const roleSettings = useAppStore((s) => s.roleSettings);
 
   const activeCount = [filters.assigneeId, filters.priority, filters.tagId].filter(Boolean).length;
 
@@ -42,7 +45,7 @@ export function KanbanFilters({ users, tags, filters, onChange }: KanbanFiltersP
           <Select value={filters.assigneeId || ""} onChange={(v) => onChange({ ...filters, assigneeId: v || undefined })}
             options={[
               { value: "", label: "Все исполнители" },
-              ...users.map((u: any) => ({ value: u.id, label: u.name })),
+              ...users.map((u: any) => ({ value: u.id, label: getUserLabel(u, roleSettings) })),
             ]} />
           <Select value={filters.priority || ""} onChange={(v) => onChange({ ...filters, priority: v || undefined })}
             options={[
@@ -64,7 +67,7 @@ export function KanbanFilters({ users, tags, filters, onChange }: KanbanFiltersP
 
       {filters.assigneeId && (
         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-secondary text-xs text-foreground">
-          {users.find((u: any) => u.id === filters.assigneeId)?.name}
+          {getUserLabel(users.find((u: any) => u.id === filters.assigneeId), roleSettings)}
           <button onClick={() => clear("assigneeId")} className="text-muted-foreground hover:text-foreground"><X size={10} /></button>
         </span>
       )}

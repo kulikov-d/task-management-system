@@ -2,16 +2,17 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ArrowLeft, Mail, Flame, CheckCircle2 } from "lucide-react";
 import { usersApi, tasksApi } from "../api/client";
-import { formatDate } from "../utils/helpers";
+import { formatDate, getRoleLabel } from "../utils/helpers";
+import { useAppStore } from "../stores/appStore";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar } from "./ui/avatar";
 
-const ROLE_CONFIG: Record<string, { label: string; variant: "error" | "warning" | "info" }> = {
-  admin: { label: "Администратор", variant: "error" },
-  lead: { label: "Тимлид", variant: "warning" },
-  developer: { label: "Разработчик", variant: "info" },
+const ROLE_VARIANT: Record<string, "error" | "warning" | "info"> = {
+  admin: "error",
+  lead: "warning",
+  developer: "info",
 };
 
 interface UserTask {
@@ -22,6 +23,7 @@ interface UserTask {
 export function UserProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const [user, setUser] = useState<any>(null);
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export function UserProfile() {
     </div>
   );
 
-  const cfg = ROLE_CONFIG[user.role] || ROLE_CONFIG.developer;
+  const cfg = ROLE_VARIANT[user.role] || ROLE_VARIANT.developer;
   const done = tasks.filter((t) => t.status === "DONE").length;
 
   return (
@@ -60,7 +62,7 @@ export function UserProfile() {
               <h2 className="text-sm font-semibold text-foreground">{user.name}</h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Mail size={10} />{user.email}</span>
-                <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                <Badge variant={cfg}>{getRoleLabel(user.role, roleSettings)}</Badge>
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <Badge variant="secondary"><Flame size={10} /> {tasks.length} задач</Badge>

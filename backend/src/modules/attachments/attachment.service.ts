@@ -87,7 +87,7 @@ export async function uploadAttachment(request: FastifyRequest, reply: FastifyRe
     },
   });
 
-  await auditLog("attachment", "Task", taskId, { filename: file.filename, size: fileSize });
+  await auditLog("attachment", "Task", taskId, { filename: file.filename, size: fileSize }, userId);
 
   return reply.code(201).send(attachment);
 }
@@ -124,6 +124,6 @@ export async function deleteAttachment(request: FastifyRequest, reply: FastifyRe
     });
   }
 
-  await auditLog("delete", "Attachment", id);
+  await auditLog("delete", "Attachment", id, null, request.userId!);
   return reply.code(204).send();
 }

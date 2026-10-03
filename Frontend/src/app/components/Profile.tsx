@@ -2,30 +2,34 @@ import { useNavigate } from "react-router";
 import { Trash2, Shield, Mail } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useAppStore } from "../stores/appStore";
+import { getRoleLabel } from "../utils/helpers";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar } from "./ui/avatar";
 import { Alert } from "./ui/alert";
+import { toast } from "./ui/toast";
 
-const ROLE_CONFIG: Record<string, { label: string; variant: "error" | "warning" | "info" }> = {
-  admin: { label: "Администратор", variant: "error" },
-  lead: { label: "Тимлид", variant: "warning" },
-  developer: { label: "Разработчик", variant: "info" },
+const ROLE_VARIANT: Record<string, "error" | "warning" | "info"> = {
+  admin: "error",
+  lead: "warning",
+  developer: "info",
 };
 
 export function Profile() {
   const { user, logout } = useAuthStore();
   const deleteUser = useAppStore((s) => s.deleteUser);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const navigate = useNavigate();
 
   if (!user) return null;
 
-  const cfg = ROLE_CONFIG[user.role] || ROLE_CONFIG.developer;
+  const variant = ROLE_VARIANT[user.role] || ROLE_VARIANT.developer;
 
   const handleDeleteProfile = async () => {
     if (!confirm("Вы уверены, что хотите удалить свой профиль?")) return;
-    try { await deleteUser(user.id); logout(); navigate("/login"); } catch {}
+    try { await deleteUser(user.id); logout(); navigate("/login"); }
+    catch { toast.error("Не удалось удалить профиль"); }
   };
 
   return (
@@ -38,7 +42,7 @@ export function Profile() {
             <Avatar name={user.name} size="lg" />
             <div>
               <h3 className="text-sm font-semibold text-foreground">{user.name}</h3>
-              <Badge variant={cfg.variant} className="mt-1">{cfg.label}</Badge>
+              <Badge variant={variant} className="mt-1">{getRoleLabel(user.role, roleSettings)}</Badge>
             </div>
           </div>
 
@@ -47,7 +51,7 @@ export function Profile() {
               <Mail size={13} className="text-muted-foreground" /> {user.email}
             </div>
             <div className="flex items-center gap-2 text-xs text-foreground">
-              <Shield size={13} className="text-muted-foreground" /> {cfg.label}
+              <Shield size={13} className="text-muted-foreground" /> {getRoleLabel(user.role, roleSettings)}
             </div>
           </div>
 

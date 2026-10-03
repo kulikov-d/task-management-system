@@ -5,7 +5,7 @@ import { Avatar } from "./ui/avatar";
 const STATUS_LABELS: Record<string, string> = {
   TODO: "К выполнению",
   IN_PROGRESS: "В работе",
-  IN_REVIEW: "На ревью",
+  IN_REVIEW: "На проверке",
   DONE: "Готово",
 };
 

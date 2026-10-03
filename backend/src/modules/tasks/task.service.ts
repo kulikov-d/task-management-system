@@ -37,8 +37,13 @@ const taskInclude = {
   assignee: { select: { id: true, name: true, email: true, avatar: true } },
   author: { select: { id: true, name: true, email: true } },
   tags: { include: { tag: { select: { id: true, name: true, color: true, projectId: true } } } },
-  _count: { select: { comments: true, attachments: true } },
+  _count: { select: { comments: true, attachments: true, subtasks: true } },
   timeEntries: { select: { duration: true } },
+  subtasks: { select: { id: true, completed: true }, orderBy: { position: "asc" as const } },
+  linksIn: {
+    where: { type: "blocks" },
+    select: { id: true, sourceTask: { select: { id: true, status: true } } },
+  },
 };
 
 async function assertProjectMember(userId: string, projectId: string) {
@@ -96,6 +101,13 @@ export async function getTask(request: FastifyRequest, reply: FastifyReply) {
       attachments: {
         include: { uploadedBy: { select: { id: true, name: true } } },
       },
+      subtasks: { orderBy: { position: "asc" } },
+      linksIn: {
+        include: { sourceTask: { select: { id: true, title: true, status: true, priority: true } } },
+      },
+      linksOut: {
+        include: { targetTask: { select: { id: true, title: true, status: true, priority: true } } },
+      },
     },
   });
   if (!task) throw new AppError("Task not found", 404);
@@ -138,7 +150,7 @@ export async function createTask(request: FastifyRequest, reply: FastifyReply) {
     },
   });
 
-  await auditLog("create", "Task", task.id, { title: task.title });
+  await auditLog("create", "Task", task.id, { title: task.title }, userId);
 
   emitToProject(task.projectId, "task:created", task);
 
@@ -174,7 +186,7 @@ export async function updateTask(request: FastifyRequest, reply: FastifyReply) {
     },
   });
 
-  await auditLog("update", "Task", task.id, data as Record<string, unknown>);
+  await auditLog("update", "Task", task.id, data as Record<string, unknown>, request.userId!);
 
   emitToProject(task.projectId, "task:updated", task);
 
@@ -198,7 +210,7 @@ export async function deleteTask(request: FastifyRequest, reply: FastifyReply) {
   }
 
   await prisma.task.delete({ where: { id } });
-  await auditLog("delete", "Task", id);
+  await auditLog("delete", "Task", id, null, userId);
   emitToProject(task.projectId, "task:deleted", { taskId: id });
   return reply.code(204).send();
 }
@@ -230,7 +242,7 @@ export async function assignTask(request: FastifyRequest, reply: FastifyReply) {
     },
   });
 
-  await auditLog("assign", "Task", task.id, { assigneeId });
+  await auditLog("assign", "Task", task.id, { assigneeId, assigneeName: task.assignee?.name }, request.userId!);
 
   emitToProject(task.projectId, "task:assigned", { task, assignee: task.assignee });
 
@@ -247,6 +259,24 @@ export async function assignTask(request: FastifyRequest, reply: FastifyReply) {
   return reply.send(enrichTaskWithTime(task));
 }
 
+async function assertNotBlocked(task: { id: string; status: string }) {
+  if (task.status !== "TODO") return;
+  const blockers = await prisma.taskLink.findMany({
+    where: {
+      targetTaskId: task.id,
+      type: "blocks",
+      sourceTask: { status: { not: "DONE" } },
+    },
+    include: { sourceTask: { select: { id: true, title: true, status: true } } },
+  });
+  if (blockers.length > 0) {
+    throw new AppError(
+      `Задача заблокирована незавершёнными зависимостями: ${blockers.map((b) => `«${b.sourceTask.title}»`).join(", ")}. Сначала завершите их.`,
+      409
+    );
+  }
+}
+
 export async function changeStatus(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
   const { status } = z.object({ status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]) }).parse(request.body);
@@ -255,6 +285,10 @@ export async function changeStatus(request: FastifyRequest, reply: FastifyReply)
   if (!existing) throw new AppError("Task not found", 404);
 
   await assertProjectMember(request.userId!, existing.projectId);
+
+  if (status === "IN_PROGRESS") {
+    await assertNotBlocked(existing);
+  }
 
   const task = await prisma.task.update({
     where: { id },
@@ -271,7 +305,7 @@ export async function changeStatus(request: FastifyRequest, reply: FastifyReply)
     },
   });
 
-  await auditLog("status_change", "Task", task.id, { oldStatus: existing.status, newStatus: status });
+  await auditLog("status_change", "Task", task.id, { oldStatus: existing.status, newStatus: status }, request.userId!);
 
   emitToProject(task.projectId, "task:statusChanged", {
     task,
@@ -301,6 +335,10 @@ export async function moveTaskHandler(request: FastifyRequest, reply: FastifyRep
 
   await assertProjectMember(request.userId!, existing.projectId);
 
+  if (status === "IN_PROGRESS") {
+    await assertNotBlocked(existing);
+  }
+
   const task = await prisma.task.update({
     where: { id },
     data: { status, position },
@@ -316,7 +354,7 @@ export async function moveTaskHandler(request: FastifyRequest, reply: FastifyRep
     },
   });
 
-  await auditLog("move", "Task", task.id, { fromStatus: existing.status, toStatus: status, position });
+  await auditLog("move", "Task", task.id, { fromStatus: existing.status, toStatus: status, position }, request.userId!);
 
   emitToProject(task.projectId, "task:moved", {
     task,
@@ -372,4 +410,148 @@ export async function removeTagFromTask(request: FastifyRequest, reply: FastifyR
 
   emitToProject(task.projectId, "task:updated", updatedTask);
   return reply.send(enrichTaskWithTime(updatedTask));
+}
+
+// ---------------------------------------------------------------------------
+// Подзадачи (чек-лист внутри задачи)
+// ---------------------------------------------------------------------------
+
+export async function createSubtask(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const { title } = request.body as { title?: string };
+
+  if (!title || !title.trim()) throw new AppError("Введите название подзадачи", 400);
+
+  const task = await prisma.task.findUnique({ where: { id } });
+  if (!task) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(request.userId!, task.projectId);
+
+  const maxPos = await prisma.subtask.aggregate({
+    where: { taskId: id },
+    _max: { position: true },
+  });
+
+  const subtask = await prisma.subtask.create({
+    data: { title: title.trim(), taskId: id, position: (maxPos._max.position ?? -1) + 1 },
+  });
+
+  await auditLog("create", "Subtask", subtask.id, { taskId: id, title: subtask.title }, request.userId!);
+  emitToProject(task.projectId, "subtask:created", { taskId: id, subtask });
+
+  return reply.code(201).send(subtask);
+}
+
+export async function updateSubtask(request: FastifyRequest, reply: FastifyReply) {
+  const { subtaskId } = request.params as { subtaskId: string };
+  const { title, completed } = request.body as { title?: string; completed?: boolean };
+
+  const existing = await prisma.subtask.findUnique({
+    where: { id: subtaskId },
+    include: { task: { select: { projectId: true } } },
+  });
+  if (!existing) throw new AppError("Подзадача не найдена", 404);
+
+  await assertProjectMember(request.userId!, existing.task.projectId);
+
+  const subtask = await prisma.subtask.update({
+    where: { id: subtaskId },
+    data: {
+      ...(typeof title === "string" && title.trim() ? { title: title.trim() } : {}),
+      ...(typeof completed === "boolean" ? { completed } : {}),
+    },
+  });
+
+  emitToProject(existing.task.projectId, "subtask:updated", { taskId: existing.taskId, subtask });
+  return reply.send(subtask);
+}
+
+export async function deleteSubtask(request: FastifyRequest, reply: FastifyReply) {
+  const { subtaskId } = request.params as { subtaskId: string };
+
+  const existing = await prisma.subtask.findUnique({
+    where: { id: subtaskId },
+    include: { task: { select: { projectId: true } } },
+  });
+  if (!existing) throw new AppError("Подзадача не найдена", 404);
+
+  await assertProjectMember(request.userId!, existing.task.projectId);
+
+  await prisma.subtask.delete({ where: { id: subtaskId } });
+
+  await auditLog("delete", "Subtask", subtaskId, { taskId: existing.taskId }, request.userId!);
+  emitToProject(existing.task.projectId, "subtask:deleted", { taskId: existing.taskId, subtaskId });
+  return reply.code(204).send();
+}
+
+// ---------------------------------------------------------------------------
+// Связи задач (зависимости): sourceTask "blocks" targetTask
+// ---------------------------------------------------------------------------
+
+async function isReachable(fromId: string, toId: string, visited = new Set<string>()): Promise<boolean> {
+  if (fromId === toId) return true;
+  if (visited.has(fromId)) return false;
+  visited.add(fromId);
+
+  const links = await prisma.taskLink.findMany({
+    where: { sourceTaskId: fromId },
+    select: { targetTaskId: true },
+  });
+  for (const l of links) {
+    if (await isReachable(l.targetTaskId, toId, visited)) return true;
+  }
+  return false;
+}
+
+export async function createTaskLink(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const { targetTaskId, type } = request.body as { targetTaskId?: string; type?: string };
+  const linkType = type === "related" ? "related" : "blocks";
+
+  if (!targetTaskId) throw new AppError("Укажите целевую задачу", 400);
+
+  const source = await prisma.task.findUnique({ where: { id } });
+  if (!source) throw new AppError("Task not found", 404);
+
+  const target = await prisma.task.findUnique({ where: { id: targetTaskId } });
+  if (!target) throw new AppError("Целевая задача не найдена", 404);
+
+  if (id === targetTaskId) throw new AppError("Нельзя связать задачу с самой собой", 400);
+  if (source.projectId !== target.projectId) {
+    throw new AppError("Связывать можно только задачи одного проекта", 400);
+  }
+
+  await assertProjectMember(request.userId!, source.projectId);
+
+  if (linkType === "blocks" && (await isReachable(targetTaskId, id))) {
+    throw new AppError("Нельзя создать циклическую зависимость", 400);
+  }
+
+  const link = await prisma.taskLink.create({
+    data: { sourceTaskId: id, targetTaskId, type: linkType },
+    include: { targetTask: { select: { id: true, title: true, status: true, priority: true } } },
+  });
+
+  await auditLog("create", "TaskLink", link.id, { sourceTaskId: id, targetTaskId, type: linkType }, request.userId!);
+  emitToProject(source.projectId, "task:linkAdded", { taskId: id, link });
+
+  return reply.code(201).send(link);
+}
+
+export async function deleteTaskLink(request: FastifyRequest, reply: FastifyReply) {
+  const { linkId } = request.params as { linkId: string };
+
+  const link = await prisma.taskLink.findUnique({
+    where: { id: linkId },
+    include: { sourceTask: { select: { projectId: true } } },
+  });
+  if (!link) throw new AppError("Связь не найдена", 404);
+
+  await assertProjectMember(request.userId!, link.sourceTask.projectId);
+
+  await prisma.taskLink.delete({ where: { id: linkId } });
+
+  await auditLog("delete", "TaskLink", linkId, null, request.userId!);
+  emitToProject(link.sourceTask.projectId, "task:linkRemoved", { linkId });
+  return reply.code(204).send();
 }

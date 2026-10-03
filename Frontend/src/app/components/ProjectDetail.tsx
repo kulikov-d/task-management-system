@@ -4,7 +4,7 @@ import { ArrowLeft, Settings } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 import { useAuthStore } from "../stores/authStore";
 import { projectsApi } from "../api/client";
-import { getProjectColor } from "../utils/helpers";
+import { getProjectColor, getRoleLabel } from "../utils/helpers";
 import { canManageMembers } from "../utils/permissions";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
@@ -12,10 +12,10 @@ import { Badge } from "./ui/badge";
 import { Avatar } from "./ui/avatar";
 import { toast } from "./ui/toast";
 
-const ROLE_CONFIG: Record<string, { label: string; variant: "error" | "warning" | "info" }> = {
-  admin: { label: "Администратор", variant: "error" },
-  lead: { label: "Тимлид", variant: "warning" },
-  developer: { label: "Разработчик", variant: "info" },
+const ROLE_VARIANT: Record<string, "error" | "warning" | "info"> = {
+  admin: "error",
+  lead: "warning",
+  developer: "info",
 };
 
 export function ProjectDetail() {
@@ -23,6 +23,7 @@ export function ProjectDetail() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const tasks = useAppStore((s) => s.tasks);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const [project, setProject] = useState<any>(null);
   const [tab, setTab] = useState<"tasks" | "members" | "settings">("tasks");
   const [loading, setLoading] = useState(true);
@@ -39,7 +40,7 @@ export function ProjectDetail() {
   const projectTasks = tasks.filter((t: any) => t.projectId === project.id);
   const done = projectTasks.filter((t: any) => t.status === "DONE").length;
   const total = projectTasks.length;
-  const canManage = canManageMembers(user, project);
+  const canManage = canManageMembers(user);
 
   const handleRemoveMember = async (userId: string) => {
     try {
@@ -103,7 +104,7 @@ export function ProjectDetail() {
       {tab === "members" && (
         <Card>
           {(project.members || []).map((m: any, i: number) => {
-            const cfg = ROLE_CONFIG[m.role] || ROLE_CONFIG.developer;
+            const cfg = ROLE_VARIANT[m.role] || ROLE_VARIANT.developer;
             return (
               <div key={m.id} className="flex items-center gap-3 px-4 py-2"
                 style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
@@ -112,7 +113,7 @@ export function ProjectDetail() {
                   <p className="text-xs font-medium text-foreground">{m.user?.name || m.userId}</p>
                   <p className="text-[10px] text-muted-foreground">{m.user?.email || ""}</p>
                 </div>
-                <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                <Badge variant={cfg}>{getRoleLabel(m.role, roleSettings)}</Badge>
                 {canManage && m.userId !== project.ownerId && (
                   <button onClick={() => handleRemoveMember(m.userId)} className="text-[10px] text-status-error hover:underline">Удалить</button>
                 )}

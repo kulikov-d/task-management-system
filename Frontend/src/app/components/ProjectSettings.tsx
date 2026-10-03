@@ -4,8 +4,10 @@ import { ArrowLeft, Trash2, UserPlus, Users, X, Tags } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 import { useAuthStore } from "../stores/authStore";
 import { projectsApi, usersApi, teamsApi, exclusionsApi, tagsApi } from "../api/client";
-import type { Team, ProjectExclusion, Tag } from "../api/client";
+import type { Team, ProjectExclusion } from "../api/client";
+import type { Tag } from "../types/api";
 import { canManageProject, canManageMembers } from "../utils/permissions";
+import { getRoleLabel } from "../utils/helpers";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input, Textarea } from "./ui/input";
@@ -22,6 +24,7 @@ export function ProjectSettings() {
   const loadProjects = useAppStore((s) => s.loadProjects);
   const removeProject = useAppStore((s) => s.removeProject);
   const setCurrentProject = useAppStore((s) => s.setCurrentProject);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const projects = useAppStore((s) => s.projects);
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -76,8 +79,8 @@ export function ProjectSettings() {
     }).catch(() => setLoading(false));
   }, [id]);
 
-  const canEdit = canManageProject(user, project);
-  const canManage = canManageMembers(user, project);
+  const canEdit = canManageProject(user);
+  const canManage = canManageMembers(user);
   const canDelete = user?.id === project?.ownerId || user?.role === "admin";
 
   const handleSave = async () => {
@@ -210,8 +213,8 @@ export function ProjectSettings() {
               </div>
               <select value={memberForm.role} onChange={e => setMemberForm({ ...memberForm, role: e.target.value })}
                 className="h-8 rounded-md border border-input bg-transparent px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring">
-                <option value="developer">Разработчик</option>
-                <option value="lead">Тимлид</option>
+                <option value="developer">{getRoleLabel("developer", roleSettings)}</option>
+                <option value="lead">{getRoleLabel("lead", roleSettings)}</option>
               </select>
               <Button size="sm" onClick={handleAddMember} disabled={addingMember || !memberForm.userId}>
                 <UserPlus size={12} /> Добавить
@@ -282,7 +285,8 @@ export function ProjectSettings() {
                     <span className="text-[10px] text-muted-foreground">{ex.user.email}</span>
                   </div>
                   <button onClick={async () => {
-                    try { await exclusionsApi.remove(id!, ex.id); setExclusions(prev => prev.filter(e => e.id !== ex.id)); } catch {}
+                    try { await exclusionsApi.remove(id!, ex.id); setExclusions(prev => prev.filter(e => e.id !== ex.id)); }
+                    catch { toast.error("Не удалось удалить исключение"); }
                   }} className="p-0.5 rounded hover:bg-accent text-muted-foreground"><X size={11} /></button>
                 </div>
               ))}

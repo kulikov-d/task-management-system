@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Bell } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { notificationsApi } from "../../api/client";
+import { toast } from "./toast";
 
 export function NotificationDropdown() {
   const [open, setOpen] = useState(false);
@@ -34,7 +35,15 @@ export function NotificationDropdown() {
       loadUnreadCount();
       setOpen(false);
       if (taskId) navigate("/tasks", { state: { openTaskId: taskId } });
-    } catch {}
+    } catch { toast.error("Не удалось отметить уведомление"); }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await notificationsApi.markAllAsRead();
+      setNotifs((n) => n.map((x) => ({ ...x, read: true })));
+      loadUnreadCount();
+    } catch { toast.error("Не удалось прочитать все уведомления"); }
   };
 
   return (
@@ -51,11 +60,7 @@ export function NotificationDropdown() {
           <div className="px-3 py-2 border-b border-border flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Уведомления</span>
             {unread > 0 && (
-              <button onClick={async () => {
-                await notificationsApi.markAllAsRead();
-                setNotifs((n) => n.map((x) => ({ ...x, read: true })));
-                loadUnreadCount();
-              }} className="text-xs text-muted-foreground hover:text-foreground">Прочитать все</button>
+              <button onClick={markAllRead} className="text-xs text-muted-foreground hover:text-foreground">Прочитать все</button>
             )}
           </div>
           <div className="max-h-72 overflow-y-auto">

@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { projectsApi, tasksApi, tagsApi, usersApi, notificationsApi, auditApi, analyticsApi, sprintsApi, commentsApi, attachmentsApi, teamsApi, timeTrackingApi } from "../api/client";
+import { projectsApi, tasksApi, tagsApi, usersApi, notificationsApi, auditApi, analyticsApi, sprintsApi, commentsApi, attachmentsApi, teamsApi, timeTrackingApi, settingsApi } from "../api/client";
 import type { Team } from "../api/client";
-import type { Project, Task, Tag, User, Notification, AuditLog, Sprint, Comment, Attachment, TimeEntry } from "../types/api";
+import type { Project, Task, Tag, User, Notification, AuditLog, Sprint, Comment, Attachment, TimeEntry, RoleSetting } from "../types/api";
 
 interface AppState {
   projects: Project[];
@@ -24,11 +24,14 @@ interface AppState {
   sidebarCollapsed: boolean;
   recentTaskIds: string[];
   favoriteProjectIds: string[];
+  roleSettings: RoleSetting[];
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   addRecentTask: (taskId: string) => void;
   toggleFavoriteProject: (projectId: string) => void;
+  loadRoleSettings: () => Promise<void>;
+  updateRoleSettings: (settings: { role: string; displayName: string }[]) => Promise<void>;
 
   loadProjects: () => Promise<void>;
   setCurrentProject: (project: Project) => void;
@@ -87,6 +90,26 @@ interface AppState {
   loadTimeEntries: (taskId: string) => Promise<TimeEntry[]>;
 }
 
+const FAVORITES_KEY = "add:favoriteProjectIds";
+
+function readFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFavorites(ids: string[]) {
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+  } catch {
+    // localStorage недоступен — игнорируем
+  }
+}
+
 export const useAppStore = create<AppState>()((set, get) => ({
   projects: [],
   currentProject: null,
@@ -107,7 +130,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
   isLoading: false,
   sidebarCollapsed: false,
   recentTaskIds: [],
-  favoriteProjectIds: [],
+  favoriteProjectIds: readFavorites(),
+  roleSettings: [],
 
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
@@ -116,11 +140,13 @@ export const useAppStore = create<AppState>()((set, get) => ({
       recentTaskIds: [taskId, ...state.recentTaskIds.filter((id) => id !== taskId)].slice(0, 10),
     })),
   toggleFavoriteProject: (projectId) =>
-    set((state) => ({
-      favoriteProjectIds: state.favoriteProjectIds.includes(projectId)
+    set((state) => {
+      const next = state.favoriteProjectIds.includes(projectId)
         ? state.favoriteProjectIds.filter((id) => id !== projectId)
-        : [...state.favoriteProjectIds, projectId],
-    })),
+        : [...state.favoriteProjectIds, projectId];
+      writeFavorites(next);
+      return { favoriteProjectIds: next };
+    }),
 
   loadProjects: async () => {
     try {
@@ -165,6 +191,25 @@ export const useAppStore = create<AppState>()((set, get) => ({
       set({ users });
     } catch (err) {
       console.error("Failed to load users:", err);
+    }
+  },
+
+  loadRoleSettings: async () => {
+    try {
+      const roleSettings = await settingsApi.roleSettings();
+      set({ roleSettings });
+    } catch (err) {
+      console.error("Failed to load role settings:", err);
+    }
+  },
+
+  updateRoleSettings: async (settings) => {
+    try {
+      const res = await settingsApi.updateRoleSettings(settings);
+      set({ roleSettings: res.settings });
+    } catch (err: any) {
+      console.error("Failed to update role settings:", err);
+      throw err;
     }
   },
 

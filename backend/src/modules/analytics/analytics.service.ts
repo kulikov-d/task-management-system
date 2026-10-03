@@ -135,12 +135,12 @@ export async function getExport(request: FastifyRequest, reply: FastifyReply) {
 
   if (format === "pdf") {
     const doc = new PDFDocument({ margin: 40, size: "A4" });
-    reply.hijack();
-    reply.raw.writeHead(200, {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="tasks-${projectName}.pdf"`,
+    const chunks: Buffer[] = [];
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    const pdfDone = new Promise<void>((resolve, reject) => {
+      doc.on("end", () => resolve());
+      doc.on("error", reject);
     });
-    doc.pipe(reply.raw);
 
     doc.fontSize(18).text(projectName, { align: "center" });
     doc.moveDown(0.3);
@@ -186,7 +186,12 @@ export async function getExport(request: FastifyRequest, reply: FastifyReply) {
     }
 
     doc.end();
-    return;
+    await pdfDone;
+    const buffer = Buffer.concat(chunks);
+    const safeName = ((project?.key || projectId) + "").replace(/[^a-zA-Z0-9_-]/g, "") || "tasks";
+    reply.header("Content-Type", "application/pdf");
+    reply.header("Content-Disposition", `attachment; filename="tasks-${safeName}.pdf"`);
+    return reply.send(buffer);
   }
 
   const escapeCsv = (val: string) => {

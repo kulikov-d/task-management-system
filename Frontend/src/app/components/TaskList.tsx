@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, ListChecks, Lock } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 import { getTaskTags } from "../utils/helpers";
 import { TaskForm } from "./TaskForm";
@@ -16,7 +16,7 @@ import { Avatar } from "./ui/avatar";
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "success" | "warning" | "info" | "error" }> = {
   TODO: { label: "К выполнению", variant: "secondary" },
   IN_PROGRESS: { label: "В работе", variant: "info" },
-  IN_REVIEW: { label: "На ревью", variant: "warning" },
+  IN_REVIEW: { label: "На проверке", variant: "warning" },
   DONE: { label: "Готово", variant: "success" },
 };
 
@@ -97,6 +97,9 @@ export function TaskList({ project, showHeader = true }: { project: any; showHea
               {tasks.map((task: any) => {
                 const assignee = task.assignee || users.find((u: any) => u.id === task.assigneeId);
                 const taskTags = getTaskTags(task, tags);
+                const subtasks = task.subtasks || [];
+                const doneCount = subtasks.filter((s: any) => s.completed).length;
+                const isBlocked = task.status !== "DONE" && (task.linksIn || []).some((l: any) => l.sourceTask?.status !== "DONE");
                 return (
                   <tr key={task.id} onClick={() => setSelected(task)}
                     className="hover:bg-accent/50 transition-colors cursor-pointer border-b border-border last:border-0">
@@ -111,6 +114,20 @@ export function TaskList({ project, showHeader = true }: { project: any; showHea
                                 <span key={tag.id} className="px-1.5 py-0 rounded text-[10px] font-medium"
                                   style={{ background: tag.color + "18", color: tag.color }}>{tag.name}</span>
                               ))}
+                            </div>
+                          )}
+                          {(subtasks.length > 0 || isBlocked) && (
+                            <div className="flex items-center gap-2.5 mt-1">
+                              {subtasks.length > 0 && (
+                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground" title={`Подзадачи: ${doneCount} из ${subtasks.length}`}>
+                                  <ListChecks size={9} />{doneCount}/{subtasks.length}
+                                </span>
+                              )}
+                              {isBlocked && (
+                                <span className="flex items-center gap-1 text-[10px] text-status-error" title="Заблокирована незавершёнными зависимостями">
+                                  <Lock size={9} />Заблокирована
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>

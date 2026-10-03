@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
-import { GripVertical, MessageSquare, Paperclip, ArrowUpCircle, ArrowDownCircle, Minus, UserPlus, Trash2, Copy, Clock, Play, Pause } from "lucide-react";
+import { GripVertical, MessageSquare, Paperclip, ArrowUpCircle, ArrowDownCircle, Minus, UserPlus, Trash2, Copy, Clock, Play, Pause, Lock, ListChecks } from "lucide-react";
 import { useAppStore } from "../stores/appStore";
 import { useAuthStore } from "../stores/authStore";
 import { getTaskTags } from "../utils/helpers";
@@ -29,7 +29,7 @@ function formatElapsed(startedAt: string): string {
 const COLUMNS = [
   { id: "TODO", label: "К выполнению", color: "#8b5cf6", bg: "from-violet-50 to-purple-50", darkBg: "dark:from-violet-500/10 dark:to-purple-500/10" },
   { id: "IN_PROGRESS", label: "В работе", color: "#3b82f6", bg: "from-blue-50 to-cyan-50", darkBg: "dark:from-blue-500/10 dark:to-cyan-500/10" },
-  { id: "IN_REVIEW", label: "На ревью", color: "#f59e0b", bg: "from-amber-50 to-orange-50", darkBg: "dark:from-amber-500/10 dark:to-orange-500/10" },
+  { id: "IN_REVIEW", label: "На проверке", color: "#f59e0b", bg: "from-amber-50 to-orange-50", darkBg: "dark:from-amber-500/10 dark:to-orange-500/10" },
   { id: "DONE", label: "Готово", color: "#10b981", bg: "from-emerald-50 to-green-50", darkBg: "dark:from-emerald-500/10 dark:to-green-500/10" },
 ];
 
@@ -55,6 +55,9 @@ function TaskCard({ task, onDragStart, isDragging, onClick }: { task: any; onDra
   const assignee = task.assignee || users.find((u: any) => u.id === task.assigneeId);
   const taskTags = getTaskTags(task, tags);
   const p = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.MEDIUM;
+  const subtasks = task.subtasks || [];
+  const doneCount = subtasks.filter((s: any) => s.completed).length;
+  const isBlocked = task.status !== "DONE" && (task.linksIn || []).some((l: any) => l.sourceTask?.status !== "DONE");
 
   const isMyTask = currentUser?.id && task.assigneeId === currentUser.id;
   const isTimerOnThisTask = activeTimer?.taskId === task.id;
@@ -91,10 +94,10 @@ function TaskCard({ task, onDragStart, isDragging, onClick }: { task: any; onDra
         onClick: handleToggleTimer,
       }] : []),
       { divider: true, label: "", onClick: () => {} },
-      { label: "К выполнению", icon: ArrowDownCircle, onClick: () => { changeTaskStatus(task.id, "TODO").then(() => toast.success("Статус изменён")); } },
-      { label: "В работу", icon: GripVertical, onClick: () => { changeTaskStatus(task.id, "IN_PROGRESS").then(() => toast.success("Статус изменён")); } },
-      { label: "На ревью", icon: Minus, onClick: () => { changeTaskStatus(task.id, "IN_REVIEW").then(() => toast.success("Статус изменён")); } },
-      { label: "Готово", icon: ArrowUpCircle, onClick: () => { changeTaskStatus(task.id, "DONE").then(() => toast.success("Статус изменён")); } },
+      { label: "К выполнению", icon: ArrowDownCircle, onClick: () => { changeTaskStatus(task.id, "TODO").then(() => toast.success("Статус изменён")).catch((err: any) => toast.error(err?.message || "Не удалось изменить статус")); } },
+      { label: "В работу", icon: GripVertical, onClick: () => { changeTaskStatus(task.id, "IN_PROGRESS").then(() => toast.success("Статус изменён")).catch((err: any) => toast.error(err?.message || "Не удалось изменить статус")); } },
+      { label: "На проверке", icon: Minus, onClick: () => { changeTaskStatus(task.id, "IN_REVIEW").then(() => toast.success("Статус изменён")).catch((err: any) => toast.error(err?.message || "Не удалось изменить статус")); } },
+      { label: "Готово", icon: ArrowUpCircle, onClick: () => { changeTaskStatus(task.id, "DONE").then(() => toast.success("Статус изменён")).catch((err: any) => toast.error(err?.message || "Не удалось изменить статус")); } },
       { divider: true, label: "", onClick: () => {} },
       { label: "Скопировать ID", icon: Copy, onClick: () => { navigator.clipboard.writeText(task.id); toast.info("ID скопирован"); } },
       { label: "Удалить", icon: Trash2, danger: true, onClick: () => { if (confirm("Удалить задачу?")) { deleteTask(task.id).then(() => { removeTask(task.id); toast.success("Задача удалена"); }); } } },
@@ -149,6 +152,16 @@ function TaskCard({ task, onDragStart, isDragging, onClick }: { task: any; onDra
             <Clock size={9} />
             {isTimerOnThisTask ? liveElapsed : formatTime(task.totalTimeSpent || 0)}
           </span>
+          {subtasks.length > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground" title={`Подзадачи: ${doneCount} из ${subtasks.length}`}>
+              <ListChecks size={9} />{doneCount}/{subtasks.length}
+            </span>
+          )}
+          {isBlocked && (
+            <span className="flex items-center gap-0.5 text-[10px] text-status-error" title="Заблокирована незавершёнными зависимостями">
+              <Lock size={9} />блок
+            </span>
+          )}
         </div>
         {assignee && <Avatar name={assignee.name} size="sm" />}
       </div>
@@ -205,8 +218,14 @@ export function KanbanBoard({ project }: { project: any }) {
     if (!task || task.status === targetStatus) return;
     const targetTasks = tasks.filter((t: any) => t.status === targetStatus && t.id !== taskId);
     const newPosition = targetTasks.length;
+    const prevStatus = task.status;
+    const prevPosition = task.position;
     setTasks((prev) => prev.map((t: any) => t.id === taskId ? { ...t, status: targetStatus, position: newPosition } : t));
-    moveTask(taskId, targetStatus, newPosition).catch(() => toast.error("Не удалось переместить задачу"));
+    moveTask(taskId, targetStatus, newPosition).catch((err: any) => {
+      // Жёсткий запрет (например, задача заблокирована зависимостью): откатываем и показываем причину
+      setTasks((prev) => prev.map((t: any) => t.id === taskId ? { ...t, status: prevStatus, position: prevPosition } : t));
+      toast.error(err?.message || "Не удалось переместить задачу");
+    });
   };
 
   return (

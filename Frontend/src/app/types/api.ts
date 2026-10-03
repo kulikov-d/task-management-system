@@ -49,10 +49,42 @@ export interface Task {
   dueDate?: string | null;
   position: number;
   tags: TaskTag[];
-  _count?: { comments: number; attachments: number };
+  subtasks?: Subtask[];
+  linksIn?: TaskLink[];
+  linksOut?: TaskLink[];
+  _count?: { comments: number; attachments: number; subtasks?: number };
   totalTimeSpent?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Subtask {
+  id: string;
+  taskId: string;
+  title: string;
+  completed: boolean;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TaskLinkType = "blocks" | "related";
+
+export interface TaskLink {
+  id: string;
+  sourceTaskId: string;
+  targetTaskId: string;
+  type: TaskLinkType;
+  createdAt: string;
+  sourceTask?: TaskLinkRef;
+  targetTask?: TaskLinkRef;
+}
+
+export interface TaskLinkRef {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  priority: TaskPriority;
 }
 
 export interface Tag {
@@ -143,6 +175,33 @@ export interface TimeEntry {
   user?: User;
   task?: { id: string; title: string; status?: string; projectId?: string };
   createdAt: string;
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  name?: string | null;
+  token: string;
+  role: Role;
+  invitedById: string;
+  invitedBy?: { id: string; name: string; email: string };
+  expiresAt: string;
+  usedAt?: string | null;
+  createdAt: string;
+}
+
+export interface InvitationPublicInfo {
+  id: string;
+  email: string;
+  name?: string | null;
+  expiresAt: string;
+  used: boolean;
+  expired: boolean;
+}
+
+export interface RoleSetting {
+  role: Role;
+  displayName: string;
 }
 
 export interface PaginatedResponse<T> {

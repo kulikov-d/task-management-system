@@ -6,6 +6,7 @@ import {
   createSprint,
   updateSprint,
   deleteSprint,
+  completeSprint,
 } from "./sprint.service";
 
 export async function sprintPlugin(fastify: FastifyInstance) {
@@ -14,5 +15,6 @@ export async function sprintPlugin(fastify: FastifyInstance) {
   fastify.get("/:id", getSprint);
   fastify.post("/", createSprint);
   fastify.put("/:id", updateSprint);
+  fastify.put("/:id/complete", completeSprint);
   fastify.delete("/:id", deleteSprint);
 }

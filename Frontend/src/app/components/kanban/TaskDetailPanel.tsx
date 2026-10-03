@@ -1,21 +1,23 @@
 import { useState, useEffect, useRef } from "react";
-import { X, MessageSquare, Paperclip, Download, Trash2, Play, Pause, Clock } from "lucide-react";
+import { X, MessageSquare, Paperclip, Download, Trash2, Play, Pause, Clock, Check, Link2, Lock, ListChecks } from "lucide-react";
 import { useAppStore } from "../../stores/appStore";
 import { useAuthStore } from "../../stores/authStore";
-import { commentsApi, attachmentsApi, timeTrackingApi } from "../../api/client";
-import { getTaskTags } from "../../utils/helpers";
+import { commentsApi, attachmentsApi, timeTrackingApi, getAccessToken, tasksApi } from "../../api/client";
+import { getTaskTags, getUserLabel } from "../../utils/helpers";
 import { canAssignTask, canDeleteTask } from "../../utils/permissions";
 import { Badge } from "../ui/badge";
 import { Avatar } from "../ui/avatar";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Select } from "../ui/dropdown";
 import { TaskForm } from "../TaskForm";
-import type { TimeEntry } from "../../types/api";
+import { toast } from "../ui/toast";
+import type { TimeEntry, TaskLink } from "../../types/api";
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "success" | "warning" | "info" | "error" }> = {
   TODO: { label: "К выполнению", variant: "secondary" },
   IN_PROGRESS: { label: "В работе", variant: "info" },
-  IN_REVIEW: { label: "На ревью", variant: "warning" },
+  IN_REVIEW: { label: "На проверке", variant: "warning" },
   DONE: { label: "Готово", variant: "success" },
 };
 
@@ -29,6 +31,7 @@ interface TaskDetailPanelProps {
 
 export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPanelProps) {
   const users = useAppStore((s) => s.users);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const tags = useAppStore((s) => s.tags);
   const loadComments = useAppStore((s) => s.loadComments);
   const loadAttachments = useAppStore((s) => s.loadAttachments);
@@ -52,12 +55,44 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [elapsed, setElapsed] = useState("00:00:00");
   const [loadingEntries, setLoadingEntries] = useState(false);
+  const [subtasks, setSubtasks] = useState<any[]>([]);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [linksIn, setLinksIn] = useState<TaskLink[]>([]);
+  const [linksOut, setLinksOut] = useState<TaskLink[]>([]);
+  const [linkTarget, setLinkTarget] = useState("");
+  const [linkType, setLinkType] = useState("blocks");
+  const storeTasks = useAppStore((s) => s.tasks);
+  const updateTaskInStore = useAppStore((s) => s.updateTaskInState);
 
   useEffect(() => {
     loadComments(task.id);
     loadAttachments(task.id);
     loadTimeEntriesForTask();
+    loadDetail();
   }, [task.id]);
+
+  const loadDetail = async () => {
+    try {
+      const d = await tasksApi.get(task.id);
+      setSubtasks(d.subtasks || []);
+      setLinksIn(d.linksIn || []);
+      setLinksOut(d.linksOut || []);
+    } catch { /* детали не критичны для остальных секций */ }
+  };
+
+  // Обновляет задачу в сторе, чтобы карточка Kanban сразу отразила прогресс подзадач и блокировки
+  const refreshTaskInStore = (nextSubtasks: any[], nextLinksIn: TaskLink[]) => {
+    const current = useAppStore.getState().tasks.find((t: any) => t.id === task.id);
+    if (!current) return;
+    updateTaskInStore({
+      ...current,
+      subtasks: nextSubtasks.map((s: any) => ({ id: s.id, completed: s.completed })),
+      linksIn: nextLinksIn
+        .filter((l) => l.type === "blocks")
+        .map((l) => ({ id: l.id, sourceTask: { id: l.sourceTaskId, status: l.sourceTask?.status } })),
+    } as any);
+  };
 
   useEffect(() => {
     if (!activeTimer || activeTimer.taskId !== task.id) {
@@ -81,6 +116,8 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
     try {
       const entries = await timeTrackingApi.listByTask(task.id);
       setTimeEntries(entries);
+    } catch {
+      setTimeEntries([]);
     } finally {
       setLoadingEntries(false);
     }
@@ -91,12 +128,16 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
   const totalTime = (task.totalTimeSpent || 0) + (isTimerActive ? Math.floor((Date.now() - new Date(activeTimer!.startedAt).getTime()) / 1000) : 0);
 
   const handleToggleTimer = async () => {
-    if (isTimerActive) {
-      await stopTimer();
-      await loadTimeEntriesForTask();
-    } else {
-      await startTimer(task.id);
-    }
+    try {
+      if (isTimerActive) {
+        await stopTimer();
+        await loadTimeEntriesForTask();
+        toast.success("Таймер остановлен");
+      } else {
+        await startTimer(task.id);
+        toast.success("Таймер запущен");
+      }
+    } catch { toast.error("Не удалось изменить таймер"); }
   };
 
   const assignee = task.assignee || users.find((u: any) => u.id === task.assigneeId);
@@ -117,9 +158,39 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
       const c = await commentsApi.create(task.id, newComment.trim());
       addCommentToTask(task.id, c);
       setNewComment("");
-    } finally {
+    } catch { toast.error("Не удалось отправить комментарий"); } finally {
       setSendingComment(false);
     }
+  };
+
+  const handleDeleteComment = async (c: any) => {
+    if (!confirm("Удалить комментарий?")) return;
+    try { await commentsApi.delete(c.id); removeCommentFromTask(task.id, c.id); toast.success("Комментарий удалён"); }
+    catch { toast.error("Не удалось удалить комментарий"); }
+  };
+
+  const handleDownloadAttachment = async (a: any) => {
+    try {
+      const res = await fetch(attachmentsApi.download(a.id), {
+        headers: { Authorization: `Bearer ${getAccessToken()}` },
+      });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = a.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch { toast.error("Не удалось скачать файл"); }
+  };
+
+  const handleDeleteAttachment = async (a: any) => {
+    if (!confirm("Удалить вложение?")) return;
+    try { await attachmentsApi.delete(a.id); removeAttachmentFromTask(task.id, a.id); toast.success("Вложение удалено"); }
+    catch { toast.error("Не удалось удалить вложение"); }
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,10 +200,78 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
     try {
       const a = await attachmentsApi.upload(task.id, file);
       addAttachmentToTask(task.id, a);
-    } finally {
+      toast.success("Файл загружен");
+    } catch { toast.error("Не удалось загрузить файл"); } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const doneCount = subtasks.filter((s: any) => s.completed).length;
+  const linkOptions = storeTasks
+    .filter((t: any) => t.projectId === task.projectId && t.id !== task.id)
+    .map((t: any) => ({ value: t.id, label: t.title }));
+
+  const handleAddSubtask = async () => {
+    if (!newSubtask.trim() || addingSubtask) return;
+    setAddingSubtask(true);
+    try {
+      const s = await tasksApi.createSubtask(task.id, newSubtask.trim());
+      const next = [...subtasks, s];
+      setSubtasks(next);
+      refreshTaskInStore(next, linksIn);
+      setNewSubtask("");
+      toast.success("Подзадача добавлена");
+    } catch { toast.error("Не удалось добавить подзадачу"); } finally {
+      setAddingSubtask(false);
+    }
+  };
+
+  const handleToggleSubtask = async (s: any) => {
+    try {
+      const updated = await tasksApi.updateSubtask(s.id, { completed: !s.completed });
+      const next = subtasks.map((x) => (x.id === s.id ? updated : x));
+      setSubtasks(next);
+      refreshTaskInStore(next, linksIn);
+    } catch { toast.error("Не удалось обновить подзадачу"); }
+  };
+
+  const handleDeleteSubtask = async (s: any) => {
+    if (!confirm("Удалить подзадачу?")) return;
+    try {
+      await tasksApi.deleteSubtask(s.id);
+      const next = subtasks.filter((x) => x.id !== s.id);
+      setSubtasks(next);
+      refreshTaskInStore(next, linksIn);
+      toast.success("Подзадача удалена");
+    } catch { toast.error("Не удалось удалить подзадачу"); }
+  };
+
+  const handleAddLink = async () => {
+    if (!linkTarget) return;
+    try {
+      const l = await tasksApi.createTaskLink(task.id, { targetTaskId: linkTarget, type: linkType });
+      const nextOut = [...linksOut, l];
+      setLinksOut(nextOut);
+      refreshTaskInStore(subtasks, linksIn);
+      setLinkTarget("");
+      toast.success(linkType === "blocks" ? "Связь «блокирует» создана" : "Связь создана");
+    } catch (err: any) {
+      toast.error(err?.message || "Не удалось создать связь");
+    }
+  };
+
+  const handleDeleteLink = async (l: TaskLink) => {
+    if (!confirm("Удалить связь?")) return;
+    try {
+      await tasksApi.deleteTaskLink(task.id, l.id);
+      const nextIn = linksIn.filter((x) => x.id !== l.id);
+      const nextOut = linksOut.filter((x) => x.id !== l.id);
+      setLinksIn(nextIn);
+      setLinksOut(nextOut);
+      refreshTaskInStore(subtasks, nextIn);
+      toast.success("Связь удалена");
+    } catch { toast.error("Не удалось удалить связь"); }
   };
 
   if (showForm) {
@@ -179,9 +318,12 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Исполнитель</span>
               {assignee ? (
-                <div className="flex items-center gap-1.5">
-                  <Avatar name={assignee.name} size="sm" />
-                  <span className="text-xs text-foreground">{assignee.name}</span>
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Avatar name={assignee.name} size="sm" />
+                    <span className="text-xs text-foreground">{assignee.name}</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{getUserLabel(assignee, roleSettings).replace(assignee.name + " — ", "")}</span>
                 </div>
               ) : (
                 <span className="text-xs text-muted-foreground">Не назначен</span>
@@ -200,6 +342,106 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
             <Button variant="outline" className="w-full" onClick={() => setShowForm(true)}>
               Редактировать
             </Button>
+          </div>
+
+          {/* Подзадачи (чек-лист) */}
+          <div className="px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-1.5 mb-3">
+              <ListChecks size={13} className="text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground">Подзадачи ({doneCount}/{subtasks.length})</span>
+            </div>
+            {subtasks.length > 0 && (
+              <div className="w-full h-1.5 rounded-full bg-secondary mb-3 overflow-hidden">
+                <div className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${(doneCount / subtasks.length) * 100}%` }} />
+              </div>
+            )}
+            <div className="space-y-1.5 mb-3">
+              {subtasks.map((s: any) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <button onClick={() => handleToggleSubtask(s)} title={s.completed ? "Отметить как невыполненную" : "Отметить выполненной"}
+                    className={`w-4 h-4 rounded-full border shrink-0 flex items-center justify-center transition-colors ${s.completed ? "bg-primary border-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
+                    {s.completed && <Check size={10} strokeWidth={3} />}
+                  </button>
+                  <span className={`text-xs flex-1 leading-snug ${s.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>{s.title}</span>
+                  <button onClick={() => handleDeleteSubtask(s)} title="Удалить подзадачу"
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-status-error transition-colors shrink-0">
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddSubtask(); }}
+                placeholder="Новая подзадача..." className="h-8 text-xs" />
+              <Button size="sm" className="h-8 px-3" disabled={!newSubtask.trim() || addingSubtask} onClick={handleAddSubtask}>
+                +
+              </Button>
+            </div>
+          </div>
+
+          {/* Связи задач (зависимости) */}
+          <div className="px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Link2 size={13} className="text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground">Связи задач</span>
+            </div>
+            {linksIn.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Блокируется задачами</p>
+                <div className="space-y-1.5">
+                  {linksIn.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Lock size={11} className={l.sourceTask?.status === "DONE" ? "text-emerald-500 shrink-0" : "text-status-error shrink-0"} />
+                        <span className="text-xs text-foreground truncate">{l.sourceTask?.title}</span>
+                      </div>
+                      <button onClick={() => handleDeleteLink(l)} title="Удалить связь"
+                        className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-status-error transition-colors shrink-0">
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {linksOut.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{linksOut.some((l) => l.type === "blocks") ? "Блокирует задачи" : "Связана с задачами"}</p>
+                <div className="space-y-1.5">
+                  {linksOut.map((l) => (
+                    <div key={l.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-secondary">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {l.type === "blocks"
+                          ? <Lock size={11} className="text-muted-foreground shrink-0" />
+                          : <Link2 size={11} className="text-muted-foreground shrink-0" />}
+                        <span className="text-xs text-foreground truncate">{l.targetTask?.title}</span>
+                      </div>
+                      <button onClick={() => handleDeleteLink(l)} title="Удалить связь"
+                        className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-status-error transition-colors shrink-0">
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Select value={linkTarget} onChange={setLinkTarget} options={[
+                { value: "", label: "Выбрать задачу..." },
+                ...linkOptions,
+              ]} />
+              <div className="flex gap-2">
+                <Select value={linkType} onChange={setLinkType} options={[
+                  { value: "blocks", label: "Блокирует (жёстко)" },
+                  { value: "related", label: "Просто связана" },
+                ]} />
+                <Button size="sm" className="h-8 flex-1" disabled={!linkTarget} onClick={handleAddLink}>
+                  Связать
+                </Button>
+              </div>
+            </div>
           </div>
 
           {/* Time Tracking */}
@@ -277,8 +519,10 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
                       <Avatar name={c.author?.name || "??"} size="sm" />
                       <span className="text-[11px] font-medium text-foreground">{c.author?.name}</span>
                     </div>
-                    <button onClick={async () => { await commentsApi.delete(c.id); removeCommentFromTask(task.id, c.id); }}
-                      className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">×</button>
+                    {currentUser?.id === c.author?.id && (
+                      <button onClick={() => handleDeleteComment(c)}
+                        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">×</button>
+                    )}
                   </div>
                   <p className="text-xs text-foreground leading-relaxed">{c.content}</p>
                 </div>
@@ -318,10 +562,10 @@ export function TaskDetailPanel({ task, onClose, onTaskUpdated }: TaskDetailPane
                     <span className="text-[10px] text-muted-foreground shrink-0">({(a.size / 1024).toFixed(1)}KB)</span>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
-                    <a href={attachmentsApi.download(a.id)} target="_blank" rel="noopener noreferrer"
-                      className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"><Download size={11} /></a>
-                    <button onClick={async () => { await attachmentsApi.delete(a.id); removeAttachmentFromTask(task.id, a.id); }}
-                      className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"><Trash2 size={11} /></button>
+                    <button onClick={() => handleDownloadAttachment(a)} title="Скачать"
+                      className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"><Download size={11} /></button>
+                    <button onClick={() => handleDeleteAttachment(a)} title="Удалить"
+                      className="p-1 rounded hover:bg-accent text-status-error transition-colors"><Trash2 size={11} /></button>
                   </div>
                 </div>
               ))}

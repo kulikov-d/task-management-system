@@ -11,7 +11,7 @@ import { SkeletonTable } from "./ui/skeleton";
 const STATUS_LABELS: Record<string, string> = {
   TODO: "К выполнению",
   IN_PROGRESS: "В работе",
-  IN_REVIEW: "На ревью",
+  IN_REVIEW: "На проверке",
   DONE: "Готово",
 };
 
@@ -75,7 +75,7 @@ export function MyTasks() {
             { label: "Всего", value: stats.total, color: "text-foreground" },
             { label: "К выполнению", value: stats.todo, color: "text-violet-600" },
             { label: "В работе", value: stats.inProgress, color: "text-blue-600" },
-            { label: "На ревью", value: stats.review, color: "text-amber-600" },
+            { label: "На проверке", value: stats.review, color: "text-amber-600" },
             { label: "Готово", value: stats.done, color: "text-emerald-600" },
           ].map((s) => (
             <button key={s.label}

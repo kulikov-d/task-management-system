@@ -1,4 +1,4 @@
-import type { User, Project, ProjectMember, Task, Tag, Comment, Attachment, Notification, AuditLog, AuthResponse, PaginatedResponse, Sprint, TimeEntry } from "../types/api";
+import type { User, Project, ProjectMember, Task, Tag, Comment, Attachment, Notification, AuditLog, AuthResponse, PaginatedResponse, Sprint, TimeEntry, Invitation, InvitationPublicInfo, RoleSetting, Role, Subtask, TaskLink } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
@@ -82,13 +82,37 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
-  register: (email: string, password: string, name: string) =>
+  register: (token: string, password: string, name: string) =>
     request<AuthResponse>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ token, password, name }),
     }),
   me: () => request<User>("/auth/me"),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
+};
+
+// Invitations
+export const invitationsApi = {
+  list: () => request<Invitation[]>("/invitations"),
+  publicInfo: (token: string) =>
+    request<InvitationPublicInfo>(`/invitations/${token}/public`),
+  create: (data: { email: string; name?: string; role?: Role }) =>
+    request<Invitation>("/invitations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    request<void>(`/invitations/${id}`, { method: "DELETE" }),
+};
+
+// Settings
+export const settingsApi = {
+  roleSettings: () => request<RoleSetting[]>("/settings/roles"),
+  updateRoleSettings: (settings: { role: string; displayName: string }[]) =>
+    request<{ settings: RoleSetting[] }>("/settings/roles", {
+      method: "PUT",
+      body: JSON.stringify({ settings }),
+    }),
 };
 
 // Projects
@@ -138,6 +162,27 @@ export const tasksApi = {
       method: "PUT",
       body: JSON.stringify({ status, position }),
     }),
+  // Подзадачи (чек-лист внутри задачи)
+  createSubtask: (taskId: string, title: string) =>
+    request<Subtask>(`/tasks/${taskId}/subtasks`, {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }),
+  updateSubtask: (subtaskId: string, data: { title?: string; completed?: boolean }) =>
+    request<Subtask>(`/tasks/subtasks/${subtaskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteSubtask: (subtaskId: string) =>
+    request<void>(`/tasks/subtasks/${subtaskId}`, { method: "DELETE" }),
+  // Связи задач (зависимости)
+  createTaskLink: (taskId: string, data: { targetTaskId: string; type?: string }) =>
+    request<TaskLink>(`/tasks/${taskId}/links`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteTaskLink: (taskId: string, linkId: string) =>
+    request<void>(`/tasks/${taskId}/links/${linkId}`, { method: "DELETE" }),
 };
 
 // Comments
@@ -234,6 +279,8 @@ export const sprintsApi = {
     request<Sprint>("/sprints", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: { name?: string; description?: string; startDate?: string; endDate?: string; isActive?: boolean }) =>
     request<Sprint>(`/sprints/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  complete: (id: string) =>
+    request<{ sprint: Sprint; movedToBacklog: number }>(`/sprints/${id}/complete`, { method: "PUT" }),
   delete: (id: string) =>
     request<void>(`/sprints/${id}`, { method: "DELETE" }),
 };
@@ -277,6 +324,8 @@ export const usersApi = {
   list: () => request<User[]>("/users"),
   get: (id: string) => request<User>(`/users/${id}`),
   search: (q: string) => request<User[]>(`/users/search?q=${encodeURIComponent(q)}`),
+  updateRole: (id: string, role: Role) =>
+    request<User>(`/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
   delete: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
 };
 

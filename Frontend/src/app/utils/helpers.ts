@@ -43,3 +43,27 @@ export function getTaskTags(task: any, allTags: any[]): any[] {
     return allTags.find((t: any) => t.id === tt);
   }).filter(Boolean);
 }
+
+export const DEFAULT_ROLE_LABELS: Record<string, string> = {
+  admin: "Администратор",
+  lead: "Руководитель",
+  developer: "Исполнитель",
+};
+
+export function getRoleLabel(role: string, roleSettings?: Array<{ role: string; displayName: string }> | null): string {
+  if (roleSettings && roleSettings.length > 0) {
+    const found = roleSettings.find((s) => s.role === role);
+    if (found?.displayName) return found.displayName;
+  }
+  return DEFAULT_ROLE_LABELS[role] || role;
+}
+
+/** Подпись пользователя с ролью: «Алексей Смирнов — Руководитель» */
+export function getUserLabel(
+  user: { name: string; role?: string } | undefined | null,
+  roleSettings?: Array<{ role: string; displayName: string }> | null
+): string {
+  if (!user) return "";
+  const role = user.role ? getRoleLabel(user.role, roleSettings) : "";
+  return role ? `${user.name} — ${role}` : user.name;
+}

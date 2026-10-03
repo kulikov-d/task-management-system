@@ -23,7 +23,8 @@ export async function auditLog(
         userId,
       },
     });
-  } catch {
-    // Silent fail — audit should never break main operation
+  } catch (err) {
+    // Аудит не должен ломать основную операцию, но ошибку логируем
+    console.error("[audit] failed to write log:", action, entity, entityId, err);
   }
 }

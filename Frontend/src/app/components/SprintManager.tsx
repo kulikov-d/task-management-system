@@ -53,11 +53,24 @@ export function SprintManager({ project }: { project: any }) {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Удалить спринт?")) return;
-    try { await sprintsApi.delete(id); await loadSprints(project.id); } catch {}
+    try { await sprintsApi.delete(id); await loadSprints(project.id); toast.success("Спринт удалён"); }
+    catch { toast.error("Не удалось удалить спринт"); }
   };
 
-  const handleToggleActive = async (sprint: any) => {
-    try { await sprintsApi.update(sprint.id, { isActive: !sprint.isActive }); await loadSprints(project.id); } catch {}
+  const handleActivate = async (sprint: any) => {
+    try { await sprintsApi.update(sprint.id, { isActive: true }); await loadSprints(project.id); toast.success("Спринт активирован"); }
+    catch { toast.error("Не удалось активировать спринт"); }
+  };
+
+  const handleComplete = async (sprint: any) => {
+    if (!confirm(`Завершить спринт «${sprint.name}»?\nНезавершённые задачи вернутся в бэклог.`)) return;
+    try {
+      const res = await sprintsApi.complete(sprint.id);
+      await loadSprints(project.id);
+      toast.success(res.movedToBacklog > 0
+        ? `Спринт завершён: ${res.movedToBacklog} задач(и) вернулись в бэклог`
+        : "Спринт завершён");
+    } catch { toast.error("Не удалось завершить спринт"); }
   };
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString("ru-RU");
@@ -97,9 +110,16 @@ export function SprintManager({ project }: { project: any }) {
           <Card key={sprint.id} className={`p-4 ${sprint.isActive ? "ring-1 ring-foreground/20" : ""}`}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <button onClick={() => handleToggleActive(sprint)} title={sprint.isActive ? "Деактивировать" : "Активировать"}>
-                  {sprint.isActive ? <CheckCircle2 size={16} className="text-foreground" /> : <Circle size={16} className="text-muted-foreground" />}
-                </button>
+                {sprint.isActive ? (
+                  <button onClick={() => handleComplete(sprint)}
+                    title="Завершить спринт: незавершённые задачи вернутся в бэклог">
+                    <CheckCircle2 size={16} className="text-foreground" />
+                  </button>
+                ) : (
+                  <button onClick={() => handleActivate(sprint)} title="Активировать спринт">
+                    <Circle size={16} className="text-muted-foreground" />
+                  </button>
+                )}
                 <div>
                   <p className="text-xs font-semibold text-foreground">
                     {sprint.name}

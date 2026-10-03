@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAppStore } from "../stores/appStore";
 import { useAuthStore } from "../stores/authStore";
 import { canAssignTask } from "../utils/permissions";
+import { getUserLabel } from "../utils/helpers";
 import { SlideOver } from "./ui/slide-over";
 import { Input, Textarea } from "./ui/input";
 import { Select } from "./ui/dropdown";
@@ -17,6 +18,7 @@ interface TaskFormProps {
 
 export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
   const users = useAppStore((s) => s.users);
+  const roleSettings = useAppStore((s) => s.roleSettings);
   const tags = useAppStore((s) => s.tags);
   const sprints = useAppStore((s) => s.sprints);
   const loadSprints = useAppStore((s) => s.loadSprints);
@@ -106,10 +108,19 @@ export function TaskForm({ task, projectId, onClose, onSaved }: TaskFormProps) {
           </div>
           <div>
             <label className="block text-xs font-medium text-foreground mb-1">Исполнитель</label>
-            <Select value={assigneeId} onChange={setAssigneeId} options={[
-              { value: "", label: "Не назначен" },
-              ...users.map((u: any) => ({ value: u.id, label: u.name })),
-            ]} />
+            {canAssign ? (
+              <Select value={assigneeId} onChange={setAssigneeId} options={[
+                { value: "", label: "Не назначен" },
+                ...users.map((u: any) => ({ value: u.id, label: getUserLabel(u, roleSettings) })),
+              ]} />
+            ) : (
+              <select disabled value={assigneeId}
+                className="flex h-8 w-full rounded-md border border-input bg-muted/30 px-2 py-1 text-sm opacity-60 cursor-not-allowed focus:outline-none">
+                {assigneeId
+                  ? <option value={assigneeId}>{users.find((u: any) => u.id === assigneeId)?.name || "Назначен"}</option>
+                  : <option value="">Не назначен</option>}
+              </select>
+            )}
           </div>
         </div>
 

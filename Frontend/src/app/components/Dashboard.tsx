@@ -13,7 +13,7 @@ import { QuickCreateModal } from "./QuickCreateModal";
 const STATUS_LABELS: Record<string, string> = {
   TODO: "К выполнению",
   IN_PROGRESS: "В работе",
-  IN_REVIEW: "На ревью",
+  IN_REVIEW: "На проверке",
   DONE: "Готово",
 };
 
@@ -27,7 +27,7 @@ const STATUS_COLORS: Record<string, string> = {
 const STAT_CONFIG = [
   { key: "total", label: "Всего", icon: CheckCircle2, gradient: "from-violet-500 to-purple-600", bg: "bg-violet-50 dark:bg-violet-500/10" },
   { key: "inProgress", label: "В работе", icon: TrendingUp, gradient: "from-blue-500 to-cyan-500", bg: "bg-blue-50 dark:bg-blue-500/10" },
-  { key: "review", label: "На ревью", icon: Clock, gradient: "from-amber-500 to-orange-500", bg: "bg-amber-50 dark:bg-amber-500/10" },
+  { key: "review", label: "На проверке", icon: Clock, gradient: "from-amber-500 to-orange-500", bg: "bg-amber-50 dark:bg-amber-500/10" },
   { key: "overdue", label: "Просрочено", icon: AlertTriangle, gradient: "from-red-500 to-pink-500", bg: "bg-red-50 dark:bg-red-500/10" },
 ];
 

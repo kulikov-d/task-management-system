@@ -11,22 +11,12 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isRegister, setIsRegister] = useState(false);
-  const [name, setName] = useState("");
-  const { login, register, error, clearError } = useAuthStore();
+  const { login, error, clearError } = useAuthStore();
 
   const handleLogin = async () => {
     clearError();
     try {
       await login(email, password);
-      navigate("/dashboard", { replace: true });
-    } catch {}
-  };
-
-  const handleRegister = async () => {
-    clearError();
-    try {
-      await register(email, password, name);
       navigate("/dashboard", { replace: true });
     } catch {}
   };
@@ -42,13 +32,6 @@ export function LoginPage() {
           <p className="text-xs text-muted-foreground mt-1">Система управления задачами</p>
         </div>
 
-        {isRegister && (
-          <div className="mb-3">
-            <label className="block text-xs font-medium text-foreground mb-1">Имя</label>
-            <Input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" />
-          </div>
-        )}
-
         <div className="mb-3">
           <label className="block text-xs font-medium text-foreground mb-1">Email</label>
           <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="a.smirnov@add.dev" />
@@ -61,20 +44,13 @@ export function LoginPage() {
 
         {error && <Alert variant="error" className="mb-4">{error}</Alert>}
 
-        <Button onClick={isRegister ? handleRegister : handleLogin} className="w-full mb-3">
-          {isRegister ? "Зарегистрироваться" : "Войти"}
+        <Button onClick={handleLogin} className="w-full mb-3">
+          Войти
         </Button>
 
-        <button onClick={() => { setIsRegister(!isRegister); clearError(); }}
-          className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors">
-          {isRegister ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
-        </button>
-
         <div className="mt-5 p-3 rounded-lg bg-secondary text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">Демо-аккаунты:</p>
-          <p>a.smirnov@add.dev / password123 (администратор)</p>
-          <p>m.petrova@add.dev / password123 (тимлид)</p>
-          <p>d.kozlov@add.dev / password123 (разработчик)</p>
+          <p className="font-medium text-foreground mb-1">Регистрация по приглашению</p>
+          <p>Новые пользователи попадают в систему по ссылке-приглашению, которую отправляет администратор.</p>
         </div>
       </Card>
     </div>

@@ -20,6 +20,7 @@ export function useSocket() {
   const updateTaskInState = useAppStore((s) => s.updateTaskInState);
   const removeTask = useAppStore((s) => s.removeTask);
   const loadUnreadCount = useAppStore((s) => s.loadUnreadCount);
+  const loadNotifications = useAppStore((s) => s.loadNotifications);
   const addProject = useAppStore((s) => s.addProject);
   const updateProjectInState = useAppStore((s) => s.updateProjectInState);
   const removeProject = useAppStore((s) => s.removeProject);
@@ -39,7 +40,7 @@ export function useSocket() {
   const removeTeamProjectInState = useAppStore((s) => s.removeTeamProjectInState);
 
   const storeRef = useRef({
-    addTask, updateTaskInState, removeTask, loadUnreadCount,
+    addTask, updateTaskInState, removeTask, loadUnreadCount, loadNotifications,
     addProject, updateProjectInState, removeProject, refreshProject,
     addSprint, updateSprintInState, removeSprint, loadProjects,
     addCommentToTask, loadTeams, addTeam, updateTeamInState, removeTeam,
@@ -47,7 +48,7 @@ export function useSocket() {
     updateTeamProjectInState, removeTeamProjectInState,
   });
   storeRef.current = {
-    addTask, updateTaskInState, removeTask, loadUnreadCount,
+    addTask, updateTaskInState, removeTask, loadUnreadCount, loadNotifications,
     addProject, updateProjectInState, removeProject, refreshProject,
     addSprint, updateSprintInState, removeSprint, loadProjects,
     addCommentToTask, loadTeams, addTeam, updateTeamInState, removeTeam,

@@ -1,6 +1,9 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
+import { auditLog } from "../../common/middleware/audit.middleware";
+
+const VALID_ROLES = ["admin", "lead", "developer"];
 
 export async function listUsers(_request: FastifyRequest, reply: FastifyReply) {
   const users = await prisma.user.findMany({
@@ -102,4 +105,49 @@ export async function softDeleteUser(request: FastifyRequest, reply: FastifyRepl
   ]);
 
   return reply.code(204).send();
+}
+
+export async function updateUserRole(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: string };
+  const { role } = request.body as { role?: string };
+  const actorId = request.userId!;
+
+  if (!role || !VALID_ROLES.includes(role)) {
+    throw new AppError("Некорректная роль", 400);
+  }
+  if (id === actorId) {
+    throw new AppError("Нельзя изменить собственную роль", 400);
+  }
+
+  const target = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
+    select: { id: true, role: true },
+  });
+  if (!target) throw new AppError("Пользователь не найден", 404);
+
+  // Нельзя понизить последнего администратора
+  if (target.role === "admin" && role !== "admin") {
+    const adminCount = await prisma.user.count({
+      where: { role: "admin", deletedAt: null },
+    });
+    if (adminCount <= 1) {
+      throw new AppError("В системе должен остаться хотя бы один администратор", 400);
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id },
+    data: { role: role as any },
+    select: { id: true, name: true, email: true, role: true, avatar: true, createdAt: true },
+  });
+
+  await auditLog(
+    "update",
+    "User",
+    id,
+    { role: { from: target.role, to: role } },
+    actorId
+  );
+
+  return reply.send(updated);
 }

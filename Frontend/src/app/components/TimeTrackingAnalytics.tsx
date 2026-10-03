@@ -23,17 +23,29 @@ function formatDuration(sec: number): string {
 export function TimeTrackingAnalytics({ project }: { project: any }) {
   const [stats, setStats] = useState<TimeStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!project?.id) return;
     setLoading(true);
+    setError(false);
     timeTrackingApi.stats(project.id)
       .then(setStats)
+      .catch(() => { setError(true); setStats(null); })
       .finally(() => setLoading(false));
   }, [project?.id]);
 
   if (loading) {
     return <div className="p-6 text-xs text-muted-foreground">Загрузка...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center">
+        <Clock size={32} className="text-muted-foreground mx-auto mb-3" />
+        <p className="text-sm text-muted-foreground">Не удалось загрузить данные о времени</p>
+      </div>
+    );
   }
 
   if (!stats || stats.totalEntries === 0) {

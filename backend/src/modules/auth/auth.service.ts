@@ -53,11 +53,22 @@ async function verifyRefreshToken(token: string): Promise<{ userId: string }> {
 }
 
 export async function register(
-  email: string,
+  token: string,
   password: string,
   name: string
 ) {
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const invitation = await prisma.invitation.findUnique({ where: { token } });
+  if (!invitation) {
+    throw new AppError("Приглашение недействительно: зарегистрироваться можно только по ссылке-приглашению", 403);
+  }
+  if (invitation.usedAt) {
+    throw new AppError("Приглашение уже использовано", 403);
+  }
+  if (invitation.expiresAt < new Date()) {
+    throw new AppError("Срок действия приглашения истёк", 403);
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email: invitation.email } });
   if (existing) {
     throw new AppError("User with this email already exists", 409);
   }
@@ -65,8 +76,18 @@ export async function register(
   const hashedPassword = await bcrypt.hash(password, 12);
 
   const user = await prisma.user.create({
-    data: { email, password: hashedPassword, name },
+    data: {
+      email: invitation.email,
+      password: hashedPassword,
+      name,
+      role: invitation.role,
+    },
     select: { id: true, email: true, name: true, role: true, createdAt: true },
+  });
+
+  await prisma.invitation.update({
+    where: { id: invitation.id },
+    data: { usedAt: new Date() },
   });
 
   const tokens = await generateTokens(user);

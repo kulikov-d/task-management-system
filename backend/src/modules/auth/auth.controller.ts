@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import { register, login, refreshToken, getMe } from "./auth.service";
 import { env } from "../../config/env";
+import { AppError } from "../../common/exceptions/AppError";
 
 function setRefreshTokenCookie(reply: FastifyReply, token: string) {
   reply.setCookie("refreshToken", token, {
@@ -13,8 +14,11 @@ function setRefreshTokenCookie(reply: FastifyReply, token: string) {
 }
 
 export async function registerHandler(request: FastifyRequest, reply: FastifyReply) {
-  const { email, password, name } = request.body as { email: string; password: string; name: string };
-  const result = await register(email, password, name);
+  const { token, password, name } = request.body as { token?: string; password: string; name: string };
+  if (!token) {
+    throw new AppError("Регистрация доступна только по приглашению", 403);
+  }
+  const result = await register(token, password, name);
   setRefreshTokenCookie(reply, result.refreshToken);
   return reply.code(201).send({
     user: result.user,

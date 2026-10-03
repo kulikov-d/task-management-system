@@ -12,6 +12,7 @@ import { Avatar } from "./ui/avatar";
 import { SlideOver } from "./ui/slide-over";
 import { Select } from "./ui/dropdown";
 import { toast } from "./ui/toast";
+import { getRoleLabel } from "../utils/helpers";
 
 export function TeamView() {
   const { user } = useAuthStore();
@@ -25,6 +26,7 @@ export function TeamView() {
   const removeTeamMemberInState = useAppStore((s) => s.removeTeamMemberInState);
   const updateTeamProjectInState = useAppStore((s) => s.updateTeamProjectInState);
   const removeTeamProjectInState = useAppStore((s) => s.removeTeamProjectInState);
+  const roleSettings = useAppStore((s) => s.roleSettings);
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,6 +158,7 @@ function TeamDetail({ team, canManage, users, allProjects, onRemoveMember, onAdd
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAssignProject, setShowAssignProject] = useState(false);
   const [expandedSection, setExpandedSection] = useState<"members" | "projects">("members");
+  const roleSettings = useAppStore((s) => s.roleSettings);
 
   const assignedProjectIds = new Set(team.projects.map((p) => p.projectId));
   const availableProjects = allProjects.filter((p) => !assignedProjectIds.has(p.id));
@@ -193,7 +196,7 @@ function TeamDetail({ team, canManage, users, allProjects, onRemoveMember, onAdd
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Badge variant="secondary">{member.role}</Badge>
+                  <Badge variant="secondary">{getRoleLabel(member.role, roleSettings)}</Badge>
                   {canManage && <button onClick={() => onRemoveMember(member.id)} className="p-0.5 rounded hover:bg-accent"><X size={10} className="text-muted-foreground" /></button>}
                 </div>
               </div>
@@ -261,6 +264,7 @@ function CreateTeamModal({ onClose, onCreate }: { onClose: () => void; onCreate:
 function AddMemberModal({ users, onClose, onAdd }: { users: any[]; onClose: () => void; onAdd: (userId: string, role: string) => void }) {
   const [selectedUser, setSelectedUser] = useState("");
   const [role, setRole] = useState("developer");
+  const roleSettings = useAppStore((s) => s.roleSettings);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -278,9 +282,9 @@ function AddMemberModal({ users, onClose, onAdd }: { users: any[]; onClose: () =
           ...users.map((u: any) => ({ value: u.id, label: `${u.name} (${u.email})` })),
         ]} />
         <Select value={role} onChange={setRole} options={[
-          { value: "developer", label: "Разработчик" },
-          { value: "lead", label: "Тимлид" },
-          { value: "admin", label: "Администратор" },
+          { value: "developer", label: getRoleLabel("developer", roleSettings) },
+          { value: "lead", label: getRoleLabel("lead", roleSettings) },
+          { value: "admin", label: getRoleLabel("admin", roleSettings) },
         ]} />
       </div>
     </SlideOver>
