@@ -1,86 +1,85 @@
-# ADD — система управления задачами
+# ADD — Task Management System
 
-Веб-приложение для управления задачами в команде. Поддерживает канбан-доску, спринты, встроенный таймер учёта трудозатрат, подзадачи-чек-листы, связи задач с контролем зависимостей, аналитику, уведомления в реальном времени, многопользовательскую работу и ролевую модель доступа с возможностью настраивать названия ролей.
+Система управления задачами с канбан-доской, аналитикой, real-time обновлениями и мульти-командной архитектурой.
 
 ## Технологии
 
 ### Backend
-- **Язык/платформа**: Node.js 20, TypeScript
-- **Фреймворк**: Fastify 5
-- **База данных**: PostgreSQL 16 + Prisma ORM
-- **Аутентификация**: JWT (jose), bcrypt
-- **Реальное время**: WebSocket (ws)
-- **Валидация**: Zod
+- **Runtime**: Node.js 20 + Fastify
+- **БД**: PostgreSQL + Prisma ORM
+- **Аутентификация**: JWT (jose) + bcrypt
+- **Real-time**: WebSocket (ws)
 - **Тестирование**: Vitest
 
 ### Frontend
-- **Фреймворк**: React 18 + React Router v6
-- **Управление состоянием**: Zustand
-- **Сборка**: Vite 5
-- **Стили**: Tailwind CSS v4
+- **Framework**: React 18 + React Router
+- **Состояние**: Zustand
+- **Сборка**: Vite
+- **Стили**: Tailwind CSS
 - **Иконки**: Lucide React
-- **Клиент WS**: ws/socket.io-client
 
 ### Инфраструктура
-- Docker, Docker Compose
-- Nginx (reverse proxy, раздача статики SPA)
-- PostgreSQL (том для хранения данных)
+- Docker Compose (4 сервиса)
+- Nginx (reverse proxy + SPA)
+- PostgreSQL (persistent volume)
 
 ## Архитектура
 
-```text
-nginx (80/443)
-  ├── /api  → backend:3000 (REST API)
-  ├── /ws   → backend:3000 (WebSocket)
-  └── /*    → frontend:80 (SPA)
-
-backend (3000)
-  ├── Fastify REST API
-  ├── WebSocket-сервер
-  └── Prisma ORM → PostgreSQL (5432)
-
-frontend (80)
-  └── Собранный статический бандл Vite (отдаётся через Nginx)
 ```
+nginx (80/443)
+  ├── /api → backend:3000
+  ├── /ws → backend:3000 (WebSocket)
+  └── /* → frontend:80
 
-Всё разворачивается одним набором контейнеров через `docker compose`.
+backend:3000
+  ├── Fastify REST API
+  ├── WebSocket server
+  └── Prisma → PostgreSQL
 
-## Возможности
-
-- Канбан-доска с перетаскиванием карточек задач между колонками
-- Спринты с ручным завершением и возвратом незавершённых задач в бэклог
-- Таймер учёта трудозатрат с сохранением истории по задачам
-- Подзадачи-чек-листы с автоматическим расчётом прогресса
-- Связи задач (типы «блокирует» и «связана») с жёстким запретом перевода заблокированной задачи в работу
-- Ролевая модель (Администратор, Руководитель, Исполнитель) с возможностью настраивать отображаемые названия ролей
-- Приглашения в систему по электронной почте
-- Комментарии, вложения и уведомления в реальном времени
-- Аналитика: burn-down, velocity, распределение задач, трудозатраты
-- Глобальный поиск, фильтры, календарь, диаграмма Ганта
-- Журнал аудита действий пользователей
+frontend:80
+  ├── Vite build → nginx
+  └── SPA (client-side routing)
+```
 
 ## Мульти-командная архитектура
 
-Система позволяет объединять пользователей в команды и управлять видимостью проектов:
+Система поддерживает организационные команды для управления видимостью проектов:
 
-- **Администратор / Руководитель** — видят все проекты
-- **Исполнитель** — видит проекты, назначенные его команде, за исключением тех, где он добавлен в список исключений
+- **Admin/Lead** — видят все проекты
+- **Developer** — видят проекты, назначенные их команде, за вычетом исключений
 
-### Сущности
-- `Team` — команда
+### Модели данных
+- `Team` — команда (Frontend Team, Backend Team)
 - `TeamMember` — участник команды с ролью
-- `TeamProject` — привязка проекта к команде
-- `ProjectExclusion` — исключение отдельного пользователя из проекта
+- `TeamProject` — назначение команды на проект
+- `ProjectExclusion` — исключение пользователя из проекта
+
+### API Команд
+```
+GET    /api/teams           — список команд
+POST   /api/teams           — создать команду
+PATCH  /api/teams/:id       — обновить команду
+DELETE /api/teams/:id       — удалить команду
+POST   /api/teams/:id/members       — добавить участника
+DELETE /api/teams/:id/members/:mid  — удалить участника
+POST   /api/teams/:id/projects      — назначить проект
+DELETE /api/teams/:id/projects/:pid — отвязать проект
+```
+
+### API Исключений
+```
+GET    /api/projects/:id/exclusions       — список исключений
+POST   /api/projects/:id/exclusions       — добавить исключение
+DELETE /api/projects/:id/exclusions/:eid  — удалить исключение
+```
 
 ## Запуск
 
-### Через Docker (основной вариант)
-
+### Docker (продакшен)
 ```bash
 docker compose up -d
 ```
-
-После запуска приложение будет доступно по адресу: [http://localhost](http://localhost)
+Открой `http://localhost`.
 
 ### Локальная разработка
 
@@ -90,7 +89,6 @@ cd backend
 cp .env.example .env
 npm install
 npx prisma db push
-npx prisma db seed
 npm run dev
 ```
 
@@ -101,162 +99,174 @@ npm install
 npm run dev
 ```
 
-Фронтенд в режиме разработки будет доступен по адресу `http://localhost:5173`, бэкенд — `http://localhost:3000`.
-
 ## Переменные окружения
 
-Для запуска нужно создать `.env` на основе шаблона:
+Скопируй и отредактируй `.env.example` → `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-| Переменная | Назначение | Обязательна |
+| Переменная | Описание | Обязательна |
 |---|---|---|
 | `DATABASE_URL` | Строка подключения к PostgreSQL | Да |
-| `JWT_SECRET` | Секрет для access-токенов | Да |
-| `JWT_REFRESH_SECRET` | Секрет для refresh-токенов | Да |
-| `SMTP_HOST` | SMTP-сервер для отправки приглашений | Нет |
+| `JWT_SECRET` | Секрет для access токенов | Да |
+| `JWT_REFRESH_SECRET` | Секрет для refresh токенов | Да |
+| `SMTP_HOST` | SMTP сервер для писем | Нет |
 | `SMTP_PORT` | Порт SMTP | Нет |
-| `SMTP_USER` | Логин SMTP | Нет |
+| `SMTP_USER` | Пользователь SMTP | Нет |
 | `SMTP_PASS` | Пароль SMTP | Нет |
-| `PORT` | Порт бэкенда (по умолчанию 3000) | Нет |
 
-## Демонстрационные данные
+## Тестовые аккаунты
 
-После `npx prisma db seed` создаются тестовые аккаунты:
-
-| E-mail | Пароль | Роль |
+| Email | Пароль | Роль |
 |---|---|---|
 | a.smirnov@add.dev | password123 | Администратор |
-| m.petrova@add.dev | password123 | Руководитель |
-| d.kozlov@add.dev | password123 | Исполнитель |
-| a.novikova@add.dev | password123 | Исполнитель |
-| s.ivanov@add.dev | password123 | Исполнитель |
+| m.petrova@add.dev | password123 | Тимлид |
+| d.kozlov@add.dev | password123 | Разработчик |
+| a.novikova@add.dev | password123 | Разработчик |
+| s.ivanov@add.dev | password123 | Разработчик |
 
-## Основные API-эндпоинты
+## API Endpoints
 
 ### Аутентификация
-```http
+```
 POST   /api/auth/login      — вход
+POST   /api/auth/register   — регистрация
 POST   /api/auth/refresh    — обновление токена
 GET    /api/auth/me         — текущий пользователь
 ```
 
 ### Проекты
-```http
-GET    /api/projects                       — список проектов
-POST   /api/projects                       — создать проект
-GET    /api/projects/:id                   — получить проект
-PATCH  /api/projects/:id                   — изменить проект
-DELETE /api/projects/:id                   — удалить проект
-POST   /api/projects/:id/members           — добавить участника
-DELETE /api/projects/:id/members/:uid      — удалить участника
+```
+GET    /api/projects        — список проектов (с фильтрацией по ролям)
+POST   /api/projects        — создать проект
+GET    /api/projects/:id    — получить проект
+PATCH  /api/projects/:id    — обновить проект
+DELETE /api/projects/:id    — удалить проект
+POST   /api/projects/:id/members  — добавить участника
+DELETE /api/projects/:id/members/:uid — удалить участника
 ```
 
 ### Задачи
-```http
-GET    /api/tasks                — список задач
-POST   /api/tasks                — создать задачу
-GET    /api/tasks/:id            — получить задачу
-PATCH  /api/tasks/:id            — изменить задачу
-DELETE /api/tasks/:id            — удалить задачу
-PATCH  /api/tasks/:id/status     — изменить статус
-PATCH  /api/tasks/:id/assign     — назначить исполнителя
+```
+GET    /api/tasks           — список задач
+POST   /api/tasks           — создать задачу
+PATCH  /api/tasks/:id       — обновить задачу
+DELETE /api/tasks/:id       — удалить задачу
+PATCH  /api/tasks/:id/status — изменить статус
+PATCH  /api/tasks/:id/assign — назначить исполнителя
 ```
 
-### Спринты
-```http
-GET    /api/sprints              — список спринтов
-POST   /api/sprints              — создать спринт
-PATCH  /api/sprints/:id          — изменить спринт
-POST   /api/sprints/:id/complete — завершить спринт
-DELETE /api/sprints/:id          — удалить спринт
+### Команды
+```
+GET    /api/teams           — список команд
+POST   /api/teams           — создать команду
+GET    /api/teams/:id       — получить команду
+PATCH  /api/teams/:id       — обновить команду
+DELETE /api/teams/:id       — удалить команду
+POST   /api/teams/:id/members       — добавить участника
+DELETE /api/teams/:id/members/:mid  — удалить участника
+POST   /api/teams/:id/projects      — назначить проект
+DELETE /api/teams/:id/projects/:pid — отвязать проект
 ```
 
-### Таймер трудозатрат
-```http
-POST   /api/time-tracking/start  — запустить таймер
-POST   /api/time-tracking/stop   — остановить таймер
-GET    /api/time-tracking/active — активный таймер
-GET    /api/time-tracking        — история записей времени
+### Пользователи
+```
+GET    /api/users           — список пользователей
+GET    /api/users/search    — поиск пользователей
+DELETE /api/users/:id       — удалить пользователя (soft delete)
 ```
 
 ### Аналитика
-```http
-GET    /api/analytics/burndown   — burn-down
-GET    /api/analytics/velocity   — velocity
-GET    /api/analytics/tasks      — статистика по задачам
+```
+GET    /api/analytics/burndown   — график сгорания
+GET    /api/analytics/velocity   — скорость команды
+GET    /api/analytics/tasks      — статистика задач
 GET    /api/analytics/export/csv — экспорт в CSV
 ```
 
-### Пользователи, команды, уведомления, аудит
-```http
-GET    /api/users                — список пользователей
-GET    /api/users/search         — поиск пользователей
-PATCH  /api/users/:id/role       — изменить роль пользователя
-GET    /api/teams                — команды
-GET    /api/notifications        — уведомления
-PATCH  /api/notifications/:id/read — отметить прочитанным
-GET    /api/audit                — журнал аудита
-GET    /api/health               — проверка работоспособности
+### Прочее
+```
+GET    /api/health          — проверка здоровья
+GET    /api/search          — глобальный поиск
+GET    /api/tags            — теги проекта
+GET    /api/sprints         — спринты проекта
+GET    /api/audit           — аудит-лог
+GET    /api/notifications   — уведомления
+GET    /api/notifications/unread — непрочитанные
+PATCH  /api/notifications/:id/read — пометить прочитанным
 ```
 
 ## Структура проекта
 
-```text
+```
 ├── backend/
 │   ├── src/
-│   │   ├── modules/           — бизнес-модули (auth, tasks, projects, sprints, ...)
-│   │   ├── common/            — middleware, утилиты, обработка ошибок
-│   │   ├── prisma/            — схема БД, миграции, сиды
-│   │   ├── config/            — конфигурация, WebSocket
-│   │   ├── main.ts            — точка входа
-│   │   └── types/             — типы
+│   │   ├── modules/
+│   │   │   ├── auth/          — аутентификация
+│   │   │   ├── projects/      — проекты
+│   │   │   ├── tasks/         — задачи
+│   │   │   ├── teams/         — команды
+│   │   │   ├── users/         — пользователи
+│   │   │   ├── analytics/     — аналитика
+│   │   │   ├── sprints/       — спринты
+│   │   │   ├── tags/          — теги
+│   │   │   ├── comments/      — комментарии
+│   │   │   ├── attachments/   — вложения
+│   │   │   ├── audit/         — аудит-лог
+│   │   │   └── notifications/ — уведомления
+│   │   ├── common/
+│   │   │   ├── middleware/     — middleware
+│   │   │   └── validation/    — валидация (Zod)
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma  — схема БД
+│   │   │   └── seed.ts        — заполнение тестовыми данными
+│   │   ├── config.ts          — конфигурация
+│   │   ├── websocket.ts       — WebSocket сервер
+│   │   └── main.ts            — точка входа
 │   ├── tests/
 │   ├── Dockerfile
 │   └── package.json
 ├── Frontend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── api/           — клиент API
-│   │   │   ├── components/    — React-компоненты
-│   │   │   ├── hooks/         — хуки
-│   │   │   ├── stores/        — хранилища Zustand
-│   │   │   ├── types/         — типы TypeScript
+│   │   │   ├── api/           — API клиент
+│   │   │   ├── components/    — React компоненты
+│   │   │   ├── hooks/         — кастомные хуки
+│   │   │   ├── stores/        — Zustand stores
 │   │   │   ├── utils/         — утилиты
-│   │   │   └── routes.tsx     — маршрутизация
+│   │   │   ├── types/         — TypeScript типы
+│   │   │   └── routes.tsx     — маршруты
 │   ├── Dockerfile
-│   ├── index.html
-│   ├── vite.config.ts
 │   └── package.json
 ├── docker-compose.yml
 ├── nginx.conf
-├── .env.example
-└── README.md
+├── .env
+
 ```
 
-## Полезные команды
+## Команды
 
 ```bash
-# Запуск всех сервисов в фоне
+# Запуск всех сервисов
 docker compose up -d
 
-# Просмотр логов бэкенда
+# Просмотр логов
 docker compose logs -f backend
 
-# Остановка сервисов
+# Остановка
 docker compose down
 
-# Остановка с удалением томов (очистка БД)
+# Сброс данных
 docker compose down -v
 
-# Пересборка и перезапуск бэкенда
+# Тесты
+cd backend && npm test
+
+# Пересборка backend
 docker compose up -d --build backend
 
-# Пересборка и перезапуск фронтенда
+# Пересборка frontend
 docker compose up -d --build frontend
-
-# Тесты бэкенда
-cd backend && npm test
 ```
