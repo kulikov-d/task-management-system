@@ -243,7 +243,7 @@ PATCH  /api/notifications/:id/read — пометить прочитанным
 ├── docker-compose.yml
 ├── nginx.conf
 ├── .env
-└── MAIN PROMT.MD              — спека проекта
+
 ```
 
 ## Команды
