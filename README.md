@@ -19,14 +19,15 @@
 - **Иконки**: Lucide React
 
 ### Инфраструктура
-- Docker Compose (4 сервиса)
-- Nginx (reverse proxy + SPA)
-- PostgreSQL (persistent volume)
+- Docker Compose (пять сервисов, включая плановое резервное копирование)
+- Nginx (reverse proxy + SPA + TLS)
+- PostgreSQL (persistent data volume)
+- Ежедневные резервные копии в отдельном Docker-томе с хранением за семь дней
 
 ## Архитектура
 
 ```
-nginx (80/443)
+nginx (HTTP 80 → HTTPS 443)
   ├── /api → backend:3000
   ├── /ws → backend:3000 (WebSocket)
   └── /* → frontend:80
@@ -41,12 +42,13 @@ frontend:80
   └── SPA (client-side routing)
 ```
 
-## Мульти-командная архитектура
+## Команды и доступ к проектам
 
-Система поддерживает организационные команды для управления видимостью проектов:
+Команды объединяют сотрудников и могут быть связаны с проектами. Права на проект задаются отдельно:
 
 - **Admin/Lead** — видят все проекты
-- **Developer** — видят проекты, назначенные их команде, за вычетом исключений
+- **Developer** — видит проект, если добавлен непосредственно в его участники и не исключён из проекта
+- Связь команды с проектом сама по себе не открывает участникам команды доступ к задачам
 
 ### Модели данных
 - `Team` — команда (Frontend Team, Backend Team)
@@ -75,11 +77,48 @@ DELETE /api/projects/:id/exclusions/:eid  — удалить исключени�
 
 ## Запуск
 
+Вложения хранятся в именованном томе `uploads_data`, подключённом к `/app/uploads`.
+Пересоздание backend не удаляет этот том; `docker compose down -v` удаляет тома и данные.
+Контейнер `backup` создаёт отдельные архивы PostgreSQL и вложений в `postgres_backups`.
+Оба архива одной даты нужно сохранять и восстанавливать вместе.
+Файлы скачиваются через `/api/attachments/:id/download` после проверки токена и доступа к проекту;
+прямой адрес `/uploads/...` закрыт.
+
+Backend в Compose запускает только сервер: автоматический seed и `db push --accept-data-loss`
+при каждом старте отключены. Для новой пустой базы перед запуском backend выполните
+`docker compose run --rm backend npx prisma migrate deploy --schema=./src/prisma/schema.prisma`.
+Миграция `20261109190000_align_schema` добавляет таблицы, которых не было в прежней истории
+миграций. Если существующую базу ранее обновляли через `prisma db push`, перед применением
+миграций необходимо отдельно сопоставить её фактическую схему с историей миграций.
+Не запускайте `migrate deploy` вслепую на такой базе: уже созданные таблицы вызовут конфликт.
+В проверенной работающей базе таблицы `_prisma_migrations` нет, но сравнение Prisma
+с текущей моделью не выявило различий в схеме. Дамп этой базы был восстановлен
+в отдельный PostgreSQL 15: после отметки пяти миграций как применённых `migrate status`
+показал актуальное состояние, а `migrate diff` не нашёл различий. Исходная база
+не менялась. Перед повторением процедуры на рабочей базе сохраните её резервную
+копию и ещё раз проверьте соответствие схемы; не запускайте на ней `migrate deploy`
+до базирования истории. Порядок отметки миграций на проверенной копии:
+
+```bash
+npx prisma migrate resolve --applied 20260612110047_init --schema=src/prisma/schema.prisma
+npx prisma migrate resolve --applied 20260619001000_remove_viewer_role --schema=src/prisma/schema.prisma
+npx prisma migrate resolve --applied 20260619010000_add_sprint --schema=src/prisma/schema.prisma
+npx prisma migrate resolve --applied 20260915183000_add_time_entries --schema=src/prisma/schema.prisma
+npx prisma migrate resolve --applied 20261109190000_align_schema --schema=src/prisma/schema.prisma
+npx prisma migrate status --schema=src/prisma/schema.prisma
+```
+Порт PostgreSQL в Compose доступен только с самого хоста (`127.0.0.1:5432`).
+Демонстрационные данные добавляйте только в тестовую базу отдельной командой
+`docker compose run --rm backend tsx src/prisma/seed.ts`.
+
 ### Docker (продакшен)
 ```bash
 docker compose up -d
 ```
-Открой `http://localhost`.
+Открой `https://localhost`. Перед запуском положи сертификат и закрытый ключ в `ssl/cert.pem` и `ssl/key.pem`. Для локальной проверки подойдёт самоподписанный сертификат; браузер покажет предупреждение. Для рабочего развёртывания используй сертификат своей организации.
+
+Резервные копии базы (`add_*.dump`) и вложений (`uploads_*.tar.gz`) создаются контейнером `backup` раз в сутки в Docker-том `postgres_backups`; архивы старше семи дней удаляются. Интервал и срок хранения настраиваются через `BACKUP_INTERVAL` (секунды) и `BACKUP_RETENTION_DAYS`.
+Для проверки восстановления используйте отдельную тестовую базу и отдельный каталог файлов, затем сверьте записи `Attachment` с извлечёнными файлами. Не восстанавливайте архив поверх рабочей базы.
 
 ### Локальная разработка
 
@@ -112,10 +151,8 @@ cp .env.example .env
 | `DATABASE_URL` | Строка подключения к PostgreSQL | Да |
 | `JWT_SECRET` | Секрет для access токенов | Да |
 | `JWT_REFRESH_SECRET` | Секрет для refresh токенов | Да |
-| `SMTP_HOST` | SMTP сервер для писем | Нет |
-| `SMTP_PORT` | Порт SMTP | Нет |
-| `SMTP_USER` | Пользователь SMTP | Нет |
-| `SMTP_PASS` | Пароль SMTP | Нет |
+| `BACKUP_INTERVAL` | Интервал резервного копирования в секундах | Нет |
+| `BACKUP_RETENTION_DAYS` | Срок хранения резервных копий в днях | Нет |
 
 ## Тестовые аккаунты
 

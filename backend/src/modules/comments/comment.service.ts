@@ -4,6 +4,13 @@ import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
 import { emitToTask } from "../../config/socket";
 import { auditLog } from "../../common/middleware/audit.middleware";
+import { assertProjectAccess } from "../../common/project-access";
+
+async function assertTaskAccess(request: FastifyRequest, taskId: string) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+  if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(request.userId!, task.projectId, request.userRole);
+}
 
 const createCommentSchema = z.object({
   content: z.string().min(1).max(5000),
@@ -11,6 +18,7 @@ const createCommentSchema = z.object({
 
 export async function listComments(request: FastifyRequest, reply: FastifyReply) {
   const { taskId } = request.params as { taskId: string };
+  await assertTaskAccess(request, taskId);
   const comments = await prisma.comment.findMany({
     where: { taskId },
     include: { author: { select: { id: true, name: true, email: true, avatar: true } } },
@@ -26,6 +34,7 @@ export async function createComment(request: FastifyRequest, reply: FastifyReply
 
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(userId, task.projectId, request.userRole);
 
   const comment = await prisma.comment.create({
     data: { content, taskId, authorId: userId },
@@ -56,6 +65,7 @@ export async function updateComment(request: FastifyRequest, reply: FastifyReply
   const existing = await prisma.comment.findUnique({ where: { id } });
   if (!existing) throw new AppError("Comment not found", 404);
   if (existing.authorId !== userId) throw new AppError("Insufficient permissions", 403);
+  await assertTaskAccess(request, existing.taskId);
 
   const comment = await prisma.comment.update({
     where: { id },
@@ -73,6 +83,7 @@ export async function deleteComment(request: FastifyRequest, reply: FastifyReply
   const existing = await prisma.comment.findUnique({ where: { id } });
   if (!existing) throw new AppError("Comment not found", 404);
   if (existing.authorId !== userId) throw new AppError("Insufficient permissions", 403);
+  await assertTaskAccess(request, existing.taskId);
 
   await prisma.comment.delete({ where: { id } });
   return reply.code(204).send();

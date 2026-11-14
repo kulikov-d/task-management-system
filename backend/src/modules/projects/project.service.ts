@@ -2,8 +2,9 @@ import { FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
-import { emitToProject, emitToAll } from "../../config/socket";
+import { emitToProject, emitToAll, revokeUserSessions } from "../../config/socket";
 import { createAndEmitNotification } from "../notifications/notification.helper";
+import { assertProjectAccess } from "../../common/project-access";
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(100),
@@ -42,15 +43,6 @@ export async function listProjects(request: FastifyRequest, reply: FastifyReply)
         OR: [
           { ownerId: userId },
           { members: { some: { userId } } },
-          {
-            teamProjects: {
-              some: {
-                team: {
-                  members: { some: { userId } },
-                },
-              },
-            },
-          },
         ],
         exclusions: {
           none: { userId },
@@ -74,6 +66,7 @@ export async function listProjects(request: FastifyRequest, reply: FastifyReply)
 
 export async function getProject(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  await assertProjectAccess(request.userId!, id, request.userRole);
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
@@ -232,7 +225,9 @@ export async function removeMember(request: FastifyRequest, reply: FastifyReply)
     where: { projectId_userId: { projectId: id, userId: memberId } },
   });
 
+  revokeUserSessions(memberId);
   emitToProject(id, "project:memberRemoved", { projectId: id, userId: memberId });
+  emitToAll("project:memberRemoved", { projectId: id, userId: memberId });
   return reply.code(204).send();
 }
 
@@ -291,6 +286,8 @@ export async function addExclusion(request: FastifyRequest, reply: FastifyReply)
     },
   });
 
+  revokeUserSessions(excludedUserId);
+  emitToAll("project:excluded", { projectId: id, userId: excludedUserId });
   return reply.code(201).send(exclusion);
 }
 
@@ -317,6 +314,7 @@ export async function removeExclusion(request: FastifyRequest, reply: FastifyRep
 
 export async function getExclusions(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  await assertProjectAccess(request.userId!, id, request.userRole);
 
   const exclusions = await prisma.projectExclusion.findMany({
     where: { projectId: id },

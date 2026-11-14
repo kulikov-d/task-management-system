@@ -2,10 +2,7 @@ import Fastify from "fastify";
 import fastifyCors from "@fastify/cors";
 import fastifyHelmet from "@fastify/helmet";
 import fastifyCookie from "@fastify/cookie";
-import fastifyStatic from "@fastify/static";
 import fastifyMultipart from "@fastify/multipart";
-import fs from "fs";
-import path from "path";
 import { env } from "./config/env";
 import { connectDatabase } from "./config/database";
 import { initSocket } from "./config/socket";
@@ -26,9 +23,11 @@ import { teamPlugin } from "./modules/teams/team.routes";
 import { timeEntryPlugin } from "./modules/time-entries/time-entries.routes";
 import { invitationPlugin } from "./modules/invitations/invitation.routes";
 import { settingsPlugin } from "./modules/settings/settings.routes";
+import { startDeadlineScheduler } from "./modules/notifications/deadline.scheduler";
 
 async function main() {
   await connectDatabase();
+  startDeadlineScheduler();
 
   const fastify = Fastify({ logger: false });
 
@@ -47,12 +46,6 @@ async function main() {
   });
   await fastify.register(fastifyCookie);
   await fastify.register(fastifyMultipart);
-
-  const uploadsDir = path.resolve("uploads");
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-  await fastify.register(fastifyStatic, { root: uploadsDir, prefix: "/uploads" });
 
   fastify.get("/api/health", async (_request, _reply) => {
     return { status: "ok", timestamp: new Date().toISOString() };

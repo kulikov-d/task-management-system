@@ -2,6 +2,8 @@ import { Server as HttpServer, IncomingMessage } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { URL } from "url";
 import { verifyAccessToken } from "../modules/auth/auth.service";
+import { assertProjectAccess } from "../common/project-access";
+import { prisma } from "./database";
 
 let wss: WebSocketServer;
 
@@ -49,11 +51,15 @@ function getUserIdFromWs(ws: WebSocket): string | undefined {
 }
 
 export function initSocket(server: HttpServer): WebSocketServer {
-  wss = new WebSocketServer({ server, path: "/ws" });
+  wss = new WebSocketServer({ noServer: true });
 
-  wss.on("upgrade", async (request, socket, head) => {
+  server.on("upgrade", async (request, socket, head) => {
     try {
       const url = new URL(request.url || "/", `http://${request.headers.host}`);
+      if (url.pathname !== "/ws") {
+        socket.destroy();
+        return;
+      }
       const token = url.searchParams.get("token");
 
       if (!token) {
@@ -91,12 +97,15 @@ export function initSocket(server: HttpServer): WebSocketServer {
     joinRoom(ws, `user:${userId}`);
     joinRoom(ws, "projects:global");
 
-    ws.on("message", (raw: Buffer) => {
+    ws.on("message", async (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString());
         const { event, data } = msg;
+        if (!data || typeof data !== "object") return;
 
         if (event === "join:project") {
+          if (typeof data.projectId !== "string") return;
+          await assertProjectAccess(userId, data.projectId, auth.role);
           joinRoom(ws, `project:${data.projectId}`);
           console.log(`✓ User ${userId} joined project:${data.projectId}`);
           broadcastToRoom(`project:${data.projectId}`, "user:joined", { userId }, ws);
@@ -104,11 +113,17 @@ export function initSocket(server: HttpServer): WebSocketServer {
           broadcastToRoom(`project:${data.projectId}`, "user:left", { userId }, ws);
           leaveRoom(ws, `project:${data.projectId}`);
         } else if (event === "join:task") {
+          if (typeof data.taskId !== "string") return;
+          const task = await prisma.task.findUnique({ where: { id: data.taskId }, select: { projectId: true } });
+          if (!task) return;
+          await assertProjectAccess(userId, task.projectId, auth.role);
           joinRoom(ws, `task:${data.taskId}`);
         } else if (event === "leave:task") {
           leaveRoom(ws, `task:${data.taskId}`);
         }
-      } catch {}
+      } catch {
+        sendTo(ws, "error", { message: "Access denied" });
+      }
     });
 
     ws.on("close", () => {
@@ -133,6 +148,17 @@ export function emitToUser(userId: string, event: string, data: any) {
   broadcastToRoom(`user:${userId}`, event, data);
 }
 
+export function revokeUserSessions(userId: string) {
+  const sessions = [...(rooms.get(`user:${userId}`) || [])];
+  for (const ws of sessions) {
+    sendTo(ws, "catalog:changed", {});
+    leaveAllRooms(ws);
+    ws.close(1008, "Project access changed");
+  }
+}
+
 export function emitToAll(event: string, data: any) {
-  broadcastToRoom("projects:global", event, data);
+  // Global subscribers must fetch their own permission-filtered catalog.
+  // Never publish project or team records to every authenticated user.
+  broadcastToRoom("projects:global", "catalog:changed", {});
 }

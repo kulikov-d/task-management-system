@@ -1,10 +1,10 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import path from "path";
 import fs from "fs";
-import { pipeline } from "stream/promises";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
 import { auditLog } from "../../common/middleware/audit.middleware";
+import { assertProjectAccess } from "../../common/project-access";
 
 const ALLOWED_MIMES = [
   "image/jpeg", "image/png", "image/gif", "image/webp",
@@ -19,6 +19,9 @@ const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
 export async function listAttachments(request: FastifyRequest, reply: FastifyReply) {
   const { taskId } = request.params as { taskId: string };
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+  if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(request.userId!, task.projectId, request.userRole);
   const attachments = await prisma.attachment.findMany({
     where: { taskId },
     include: { uploadedBy: { select: { id: true, name: true } } },
@@ -40,6 +43,7 @@ export async function uploadAttachment(request: FastifyRequest, reply: FastifyRe
 
   const task = await prisma.task.findUnique({ where: { id: taskId } });
   if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(userId, task.projectId, request.userRole);
 
   const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const ext = path.extname(file.filename);
@@ -47,23 +51,26 @@ export async function uploadAttachment(request: FastifyRequest, reply: FastifyRe
   const filePath = path.join(process.cwd(), "uploads", savedFilename);
 
   let fileSize = 0;
-  let tooLarge = false;
   const fileStream = fs.createWriteStream(filePath);
-  for await (const chunk of file.file) {
-    fileSize += chunk.length;
-    if (fileSize > MAX_FILE_SIZE) {
-      tooLarge = true;
-      fileStream.destroy();
-      break;
+  try {
+    for await (const chunk of file.file) {
+      fileSize += chunk.length;
+      if (fileSize > MAX_FILE_SIZE) {
+        throw new AppError("File too large (max 10MB)", 400);
+      }
+      if (!fileStream.write(chunk)) {
+        await new Promise<void>((resolve) => fileStream.once("drain", resolve));
+      }
     }
-    fileStream.write(chunk);
-  }
-  fileStream.end();
-  await new Promise<void>((resolve) => fileStream.on("finish", resolve));
-
-  if (tooLarge) {
+    fileStream.end();
+    await new Promise<void>((resolve, reject) => {
+      fileStream.once("finish", resolve);
+      fileStream.once("error", reject);
+    });
+  } catch (error) {
+    fileStream.destroy();
     fs.unlink(filePath, () => {});
-    throw new AppError("File too large (max 10MB)", 400);
+    throw error;
   }
 
   const attachment = await prisma.attachment.create({
@@ -96,6 +103,9 @@ export async function downloadAttachment(request: FastifyRequest, reply: Fastify
   const { id } = request.params as { id: string };
   const attachment = await prisma.attachment.findUnique({ where: { id } });
   if (!attachment) throw new AppError("Attachment not found", 404);
+  const task = await prisma.task.findUnique({ where: { id: attachment.taskId }, select: { projectId: true } });
+  if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(request.userId!, task.projectId, request.userRole);
 
   const filePath = path.join(process.cwd(), attachment.url);
   const resolvedPath = path.resolve(filePath);
@@ -113,6 +123,9 @@ export async function deleteAttachment(request: FastifyRequest, reply: FastifyRe
 
   const attachment = await prisma.attachment.findUnique({ where: { id } });
   if (!attachment) throw new AppError("Attachment not found", 404);
+  const task = await prisma.task.findUnique({ where: { id: attachment.taskId }, select: { projectId: true } });
+  if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(request.userId!, task.projectId, request.userRole);
 
   const filePath = path.join(process.cwd(), attachment.url);
   const resolvedPath = path.resolve(filePath);

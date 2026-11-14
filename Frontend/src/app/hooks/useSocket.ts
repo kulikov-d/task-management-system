@@ -63,6 +63,7 @@ export function useSocket() {
     const onEvent = (event: string, data: any) => {
       const s = storeRef.current;
       switch (event) {
+        case "catalog:changed": s.loadProjects(); s.loadTeams(); break;
         case "task:created": s.addTask(data); break;
         case "task:updated": s.updateTaskInState(data); break;
         case "task:assigned": s.updateTaskInState(data.task); break;

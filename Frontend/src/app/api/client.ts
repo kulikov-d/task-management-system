@@ -234,7 +234,7 @@ export const attachmentsApi = {
 export const analyticsApi = {
   burndown: (projectId: string, sprintId?: string) => {
     const params = `?projectId=${projectId}${sprintId ? `&sprintId=${sprintId}` : ""}`;
-    return request<{ date: string; ideal: number; actual: number }[]>(`/analytics/burndown${params}`);
+    return request<{ date: string; planned: number; actual: number }[]>(`/analytics/burndown${params}`);
   },
   velocity: (projectId: string, sprintId?: string) => {
     const params = `?projectId=${projectId}${sprintId ? `&sprintId=${sprintId}` : ""}`;

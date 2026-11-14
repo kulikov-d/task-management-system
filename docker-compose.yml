@@ -8,7 +8,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U add_user -d add_db"]
       interval: 10s
@@ -17,6 +17,7 @@ services:
     restart: unless-stopped
 
   backend:
+    command: ["node", "dist/main.js"]
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -26,10 +27,12 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-key-different-from-above-32+}
       JWT_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-https://localhost}
       BACKEND_URL: http://backend:3000
       NODE_ENV: production
       PORT: 3000
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +50,9 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     ports:
       - "80:80"
       - "443:443"
@@ -59,5 +64,38 @@ services:
       - backend
     restart: unless-stopped
 
+  backup:
+    image: postgres:15-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: add_user
+      PGPASSWORD: ${DB_PASSWORD:-add_password}
+      PGDATABASE: add_db
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - postgres_backups:/backups
+      - uploads_data:/app/uploads:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - >-
+        set -eu;
+        while true; do
+          stamp=$$(date -u +%Y%m%dT%H%M%SZ);
+          pg_dump --format=custom --file=/backups/add_$${stamp}.dump.tmp;
+          tar -czf /backups/uploads_$${stamp}.tar.gz.tmp -C /app/uploads .;
+          mv /backups/add_$${stamp}.dump.tmp /backups/add_$${stamp}.dump;
+          mv /backups/uploads_$${stamp}.tar.gz.tmp /backups/uploads_$${stamp}.tar.gz;
+          find /backups -type f -mtime +$${BACKUP_RETENTION_DAYS} -delete;
+          sleep $${BACKUP_INTERVAL};
+        done
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  postgres_backups:
+  uploads_data:

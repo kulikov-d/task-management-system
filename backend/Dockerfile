@@ -5,15 +5,13 @@ RUN apk add --no-cache python3 make g++
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci
-RUN npm rebuild bcrypt
+RUN npm_config_build_from_source=true npm_config_nodedir=/usr/local npm ci
 
 COPY . .
 RUN npx prisma generate --schema=src/prisma/schema.prisma
 RUN npm run build
 
 RUN npm prune --omit=dev
-RUN npm rebuild bcrypt
 
 FROM node:20-alpine
 
@@ -32,4 +30,4 @@ RUN mkdir -p uploads
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --schema=./src/prisma/schema.prisma --skip-generate --accept-data-loss && tsx src/prisma/seed.ts && node dist/main.js"]
+CMD ["node", "dist/main.js"]

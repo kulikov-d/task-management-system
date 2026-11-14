@@ -5,6 +5,7 @@ import { AppError } from "../../common/exceptions/AppError";
 import { emitToProject, emitToTask } from "../../config/socket";
 import { auditLog } from "../../common/middleware/audit.middleware";
 import { createAndEmitNotification } from "../notifications/notification.helper";
+import { assertProjectAccess } from "../../common/project-access";
 
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
@@ -20,7 +21,6 @@ const createTaskSchema = z.object({
 const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
-  status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
   assigneeId: z.string().nullable().optional(),
   sprintId: z.string().nullable().optional(),
@@ -51,6 +51,10 @@ async function assertProjectMember(userId: string, projectId: string) {
     where: { projectId_userId: { projectId, userId } },
   });
   if (!member) throw new AppError("Insufficient permissions", 403);
+  const exclusion = await prisma.projectExclusion.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+  });
+  if (exclusion) throw new AppError("Insufficient permissions", 403);
 }
 
 function enrichTaskWithTime<T extends { timeEntries: { duration: number | null }[] }>(task: T): Omit<T, "timeEntries"> & { totalTimeSpent: number } {
@@ -69,6 +73,8 @@ export async function listTasks(request: FastifyRequest, reply: FastifyReply) {
   if (!projectId) {
     return reply.code(400).send({ message: "projectId is required" });
   }
+
+  await assertProjectAccess(request.userId!, projectId, request.userRole);
 
   const where: any = { projectId };
   if (status) where.status = status;
@@ -111,12 +117,15 @@ export async function getTask(request: FastifyRequest, reply: FastifyReply) {
     },
   });
   if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(request.userId!, task.projectId, request.userRole);
   return reply.send(enrichTaskWithTime(task));
 }
 
 export async function createTask(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.userId!;
   const data = createTaskSchema.parse(request.body);
+
+  await assertProjectMember(userId, data.projectId);
 
   const maxPosition = await prisma.task.aggregate({
     where: { projectId: data.projectId, status: "TODO" },
@@ -153,6 +162,16 @@ export async function createTask(request: FastifyRequest, reply: FastifyReply) {
   await auditLog("create", "Task", task.id, { title: task.title }, userId);
 
   emitToProject(task.projectId, "task:created", task);
+
+  if (task.assigneeId && task.assigneeId !== userId) {
+    await createAndEmitNotification({
+      type: "assignment",
+      title: "Назначена новая задача",
+      message: `Вам назначена задача «${task.title}»`,
+      userId: task.assigneeId,
+      taskId: task.id,
+    });
+  }
 
   return reply.code(201).send(enrichTaskWithTime(task));
 }
@@ -199,6 +218,8 @@ export async function deleteTask(request: FastifyRequest, reply: FastifyReply) {
 
   const task = await prisma.task.findUnique({ where: { id } });
   if (!task) throw new AppError("Task not found", 404);
+
+  await assertProjectMember(userId, task.projectId);
 
   if (task.authorId !== userId) {
     const member = await prisma.projectMember.findUnique({

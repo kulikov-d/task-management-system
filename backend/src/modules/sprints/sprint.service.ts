@@ -4,6 +4,7 @@ import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
 import { emitToProject } from "../../config/socket";
 import { auditLog } from "../../common/middleware/audit.middleware";
+import { assertProjectAccess } from "../../common/project-access";
 
 const createSprintSchema = z.object({
   name: z.string().min(1).max(100),
@@ -26,6 +27,7 @@ export async function listSprints(request: FastifyRequest, reply: FastifyReply) 
   if (!projectId) {
     return reply.code(400).send({ message: "projectId is required" });
   }
+  await assertProjectAccess(request.userId!, projectId, request.userRole);
 
   const sprints = await prisma.sprint.findMany({
     where: { projectId },
@@ -50,11 +52,13 @@ export async function getSprint(request: FastifyRequest, reply: FastifyReply) {
     },
   });
   if (!sprint) throw new AppError("Sprint not found", 404);
+  await assertProjectAccess(request.userId!, sprint.projectId, request.userRole);
   return reply.send(sprint);
 }
 
 export async function createSprint(request: FastifyRequest, reply: FastifyReply) {
   const data = createSprintSchema.parse(request.body);
+  await assertProjectAccess(request.userId!, data.projectId, request.userRole);
 
   if (data.endDate <= data.startDate) {
     throw new AppError("endDate must be after startDate", 400);
@@ -77,6 +81,7 @@ export async function updateSprint(request: FastifyRequest, reply: FastifyReply)
 
   const existing = await prisma.sprint.findUnique({ where: { id } });
   if (!existing) throw new AppError("Sprint not found", 404);
+  await assertProjectAccess(request.userId!, existing.projectId, request.userRole);
 
   if (data.isActive === true) {
     await prisma.sprint.updateMany({
@@ -101,6 +106,7 @@ export async function deleteSprint(request: FastifyRequest, reply: FastifyReply)
   const { id } = request.params as { id: string };
   const sprint = await prisma.sprint.findUnique({ where: { id } });
   if (!sprint) throw new AppError("Sprint not found", 404);
+  await assertProjectAccess(request.userId!, sprint.projectId, request.userRole);
 
   await prisma.task.updateMany({
     where: { sprintId: id },
@@ -117,6 +123,7 @@ export async function completeSprint(request: FastifyRequest, reply: FastifyRepl
 
   const sprint = await prisma.sprint.findUnique({ where: { id } });
   if (!sprint) throw new AppError("Sprint not found", 404);
+  await assertProjectAccess(request.userId!, sprint.projectId, request.userRole);
 
   // Незавершённые задачи возвращаются в бэклог (как в Jira)
   const moved = await prisma.task.updateMany({

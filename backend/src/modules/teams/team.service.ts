@@ -63,6 +63,8 @@ export async function listTeams(request: FastifyRequest, reply: FastifyReply) {
 
 export async function getTeam(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  const userId = request.userId!;
+  const userRole = request.userRole!;
 
   const team = await prisma.team.findUnique({
     where: { id },
@@ -82,6 +84,9 @@ export async function getTeam(request: FastifyRequest, reply: FastifyReply) {
   });
 
   if (!team) throw new AppError("Team not found", 404);
+  if (userRole !== "admin" && userRole !== "lead" && !team.members.some((member) => member.userId === userId)) {
+    throw new AppError("Insufficient permissions", 403);
+  }
   return reply.send(team);
 }
 
@@ -145,9 +150,14 @@ export async function updateTeam(request: FastifyRequest, reply: FastifyReply) {
 
 export async function deleteTeam(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: string };
+  const userId = request.userId!;
 
-  const team = await prisma.team.findUnique({ where: { id } });
+  const team = await prisma.team.findUnique({ where: { id }, include: { members: true } });
   if (!team) throw new AppError("Team not found", 404);
+  const membership = team.members.find((member) => member.userId === userId);
+  if (request.userRole !== "admin" && membership?.role !== "admin") {
+    throw new AppError("Only team admins can delete the team", 403);
+  }
 
   await prisma.team.delete({ where: { id } });
   emitToAll("team:deleted", { teamId: id });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../config/database";
 import { AppError } from "../../common/exceptions/AppError";
 import { emitToProject } from "../../config/socket";
+import { assertProjectAccess } from "../../common/project-access";
 
 const startTimerSchema = z.object({
   taskId: z.string(),
@@ -31,6 +32,7 @@ export async function startTimer(request: FastifyRequest, reply: FastifyReply) {
 
   const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, projectId: true, assigneeId: true } });
   if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(userId, task.projectId, request.userRole);
   if (task.assigneeId !== userId) throw new AppError("Only the assignee can track time on this task", 403);
 
   // Стопаем любой предыдущий активный таймер
@@ -97,6 +99,9 @@ export async function getActiveTimer(request: FastifyRequest, reply: FastifyRepl
 export async function listByTask(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.userId!;
   const { taskId } = request.params as { taskId: string };
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+  if (!task) throw new AppError("Task not found", 404);
+  await assertProjectAccess(userId, task.projectId, request.userRole);
 
   const entries = await prisma.timeEntry.findMany({
     where: { taskId },
@@ -110,6 +115,7 @@ export async function listByTask(request: FastifyRequest, reply: FastifyReply) {
 export async function listByProject(request: FastifyRequest, reply: FastifyReply) {
   const userId = request.userId!;
   const { projectId } = request.params as { projectId: string };
+  await assertProjectAccess(userId, projectId, request.userRole);
 
   const entries = await prisma.timeEntry.findMany({
     where: { task: { projectId } },
@@ -138,6 +144,7 @@ export async function deleteEntry(request: FastifyRequest, reply: FastifyReply) 
 
 export async function getTimeStats(request: FastifyRequest, reply: FastifyReply) {
   const { projectId } = request.params as { projectId: string };
+  await assertProjectAccess(request.userId!, projectId, request.userRole);
   const { sprintId } = request.query as { sprintId?: string };
 
   const taskWhere: any = { projectId };
